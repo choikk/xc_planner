@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Airport Finder</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    select { margin: 0.5rem 0; padding: 0.5rem; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h2>🛫 Cross Country Planner — Airport Selector</h2>
+  <label for="stateSelect">Select State:</label>
+  <select id="stateSelect">
+    <option value="">-- Choose a State --</option>
+  </select>
+
+  <label for="airportSelect">Select Airport:</label>
+  <select id="airportSelect">
+    <option value="">-- Choose an Airport --</option>
+  </select>
+
+  <script>
+    let airportData = {};
+
+    async function loadData() {
+      const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace_mini.json"); // <-- Update this URL
+      const json = await res.json();
+      airportData = json;
+      populateStates();
+    }
+
+    function populateStates() {
+      const stateSet = new Set();
+      for (const code in airportData) {
+        const state = airportData[code].state;
+        if (state) stateSet.add(state);
+      }
+      const sortedStates = Array.from(stateSet).sort();
+      const stateSelect = document.getElementById("stateSelect");
+
+      sortedStates.forEach(state => {
+        const option = document.createElement("option");
+        option.value = state;
+        option.textContent = state;
+        stateSelect.appendChild(option);
+      });
+    }
+
+    document.getElementById("stateSelect").addEventListener("change", function () {
+      const selectedState = this.value;
+      const airportSelect = document.getElementById("airportSelect");
+      airportSelect.innerHTML = '<option value="">-- Choose an Airport --</option>';
+
+      const filtered = Object.entries(airportData).filter(([id, data]) => data.state === selectedState);
+      filtered.sort((a, b) => a[0].localeCompare(b[0]));
+
+      filtered.forEach(([id, data]) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = `${id} — ${data.airport_name}`;
+        airportSelect.appendChild(option);
+      });
+    });
+
+    loadData();
+  </script>
+</body>
+</html>
