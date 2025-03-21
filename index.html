@@ -25,7 +25,7 @@
     let airportData = {};
 
     async function loadData() {
-      const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace_mini.json"); // <-- Update this URL
+      const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace.json"); // <-- Update this URL
       const json = await res.json();
       airportData = json;
       populateStates();
