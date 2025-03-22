@@ -1,70 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Airport Finder</title>
-  <style>
-    body { font-family: sans-serif; padding: 2rem; }
-    select { margin: 0.5rem 0; padding: 0.5rem; font-size: 1rem; }
-  </style>
+  <meta charset="UTF-8" />
+  <title>Airport Selector</title>
 </head>
 <body>
-  <h2>🛫 Cross Country Planner — Airport Selector</h2>
-  <label for="stateSelect">Select State:</label>
-  <select id="stateSelect">
-    <option value="">-- Choose a State --</option>
+  <h2>Select a Country and an Airport</h2>
+
+  <label for="countrySelect">Country Code:</label>
+  <select id="countrySelect">
+    <option value="">-- Select Country --</option>
   </select>
 
-  <label for="airportSelect">Select Airport:</label>
+  <br /><br />
+
+  <label for="airportSelect">Airport:</label>
   <select id="airportSelect">
-    <option value="">-- Choose an Airport --</option>
+    <option value="">-- Select Airport --</option>
   </select>
 
   <script>
     let airportData = {};
 
-    async function loadData() {
-      const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace.json"); // <-- Update this URL
-      const json = await res.json();
-      airportData = json;
-      populateStates();
-    }
+    async function loadAirportData() {
+      try {
+        const response = await fetch("json_data/airport_base_info_with_runways_airspace.json");
+        airportData = await response.json();
 
-    function populateStates() {
-      const stateSet = new Set();
-      for (const code in airportData) {
-        const state = airportData[code].state;
-        if (state) stateSet.add(state);
+        const countrySet = new Set();
+        for (const code in airportData) {
+          const airport = airportData[code];
+          if (airport.country_code) {
+            countrySet.add(airport.country_code);
+          }
+        }
+
+        const sortedCountries = Array.from(countrySet).sort();
+        const countrySelect = document.getElementById("countrySelect");
+
+        sortedCountries.forEach(code => {
+          const option = document.createElement("option");
+          option.value = code;
+          option.textContent = code;
+          countrySelect.appendChild(option);
+        });
+
+        countrySelect.addEventListener("change", updateAirportSelect);
+      } catch (err) {
+        console.error("Failed to load airport data:", err);
       }
-      const sortedStates = Array.from(stateSet).sort();
-      const stateSelect = document.getElementById("stateSelect");
-
-      sortedStates.forEach(state => {
-        const option = document.createElement("option");
-        option.value = state;
-        option.textContent = state;
-        stateSelect.appendChild(option);
-      });
     }
 
-    document.getElementById("stateSelect").addEventListener("change", function () {
-      const selectedState = this.value;
+    function updateAirportSelect() {
+      const selectedCountry = document.getElementById("countrySelect").value;
       const airportSelect = document.getElementById("airportSelect");
-      airportSelect.innerHTML = '<option value="">-- Choose an Airport --</option>';
+      airportSelect.innerHTML = '<option value="">-- Select Airport --</option>';
 
-      const filtered = Object.entries(airportData).filter(([id, data]) => data.state === selectedState);
-      filtered.sort((a, b) => a[0].localeCompare(b[0]));
+      for (const code in airportData) {
+        const airport = airportData[code];
+        if (airport.country_code === selectedCountry) {
+          const label = `${code} - ${airport.airport_name || airport.city || ""}`;
+          const option = document.createElement("option");
+          option.value = code;
+          option.textContent = label;
+          airportSelect.appendChild(option);
+        }
+      }
+    }
 
-      filtered.forEach(([id, data]) => {
-        const option = document.createElement("option");
-        option.value = id;
-        option.textContent = `${id} — ${data.airport_name}`;
-        airportSelect.appendChild(option);
-      });
-    });
-
-    loadData();
+    loadAirportData();
   </script>
 </body>
 </html>
