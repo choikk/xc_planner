@@ -24,7 +24,7 @@
 
     async function loadAirportData() {
       try {
-        const response = await fetch("json_data/airport_base_info_with_runways_airspace.json");
+        const response = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace.json");
         airportData = await response.json();
 
         const countrySet = new Set();
