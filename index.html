@@ -2,44 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Airport Dropdown Picker</title>
+  <title>Airport Info Viewer</title>
 </head>
 <body>
-  <h2>Select Your Airport</h2>
+  <h2>Select Airport</h2>
 
-  <label for="countrySelect">Country:</label>
+  <label for="countrySelect">Country:</label><br>
   <select id="countrySelect">
     <option value="">-- Select Country --</option>
-  </select>
+  </select><br><br>
 
-  <br><br>
-
-  <label for="stateSelect">State:</label>
+  <label for="stateSelect">State:</label><br>
   <select id="stateSelect" disabled>
     <option value="">-- Select State --</option>
-  </select>
+  </select><br><br>
 
-  <br><br>
-
-  <label for="airportSelect">Airport:</label>
+  <label for="airportSelect">Airport:</label><br>
   <select id="airportSelect" disabled>
     <option value="">-- Select Airport --</option>
-  </select>
+  </select><br><br>
+
+  <div id="airportInfo"></div>
 
   <script>
     let airportData = {};
     const countrySelect = document.getElementById("countrySelect");
     const stateSelect = document.getElementById("stateSelect");
     const airportSelect = document.getElementById("airportSelect");
+    const airportInfo = document.getElementById("airportInfo");
 
-    async function loadData() {
-      try {
-        const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace.json");
-        airportData = await res.json();
-        populateCountries();
-      } catch (e) {
-        console.error("Failed to load data", e);
-      }
+    async function loadAirportData() {
+      const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace.json");
+      airportData = await res.json();
+      populateCountries();
     }
 
     function populateCountries() {
@@ -49,22 +44,22 @@
         if (country) countries.add(country);
       }
 
-      const sorted = Array.from(countries).sort();
-      for (const country of sorted) {
+      Array.from(countries).sort().forEach(c => {
         const option = document.createElement("option");
-        option.value = country;
-        option.textContent = country;
+        option.value = c;
+        option.textContent = c;
         countrySelect.appendChild(option);
-      }
+      });
 
       countrySelect.addEventListener("change", populateStates);
     }
 
     function populateStates() {
-      stateSelect.innerHTML = `<option value="">-- Select State --</option>`;
-      airportSelect.innerHTML = `<option value="">-- Select Airport --</option>`;
+      stateSelect.innerHTML = '<option value="">-- Select State --</option>';
+      airportSelect.innerHTML = '<option value="">-- Select Airport --</option>';
       stateSelect.disabled = true;
       airportSelect.disabled = true;
+      airportInfo.innerHTML = "";
 
       const selectedCountry = countrySelect.value;
       if (!selectedCountry) return;
@@ -72,50 +67,74 @@
       const states = new Set();
       for (const code in airportData) {
         const airport = airportData[code];
-        if (airport.country?.trim().toUpperCase() === selectedCountry) {
-          const state = airport.state?.trim().toUpperCase();
-          if (state) states.add(state);
+        if (airport.country?.toUpperCase() === selectedCountry) {
+          states.add(airport.state?.toUpperCase());
         }
       }
 
-      const sorted = Array.from(states).sort();
-      for (const state of sorted) {
+      Array.from(states).sort().forEach(s => {
         const option = document.createElement("option");
-        option.value = state;
-        option.textContent = state;
+        option.value = s;
+        option.textContent = s;
         stateSelect.appendChild(option);
-      }
+      });
 
       stateSelect.disabled = false;
       stateSelect.addEventListener("change", populateAirports);
     }
 
     function populateAirports() {
-      airportSelect.innerHTML = `<option value="">-- Select Airport --</option>`;
+      airportSelect.innerHTML = '<option value="">-- Select Airport --</option>';
+      airportInfo.innerHTML = "";
       airportSelect.disabled = true;
 
       const selectedCountry = countrySelect.value;
       const selectedState = stateSelect.value;
+
       if (!selectedCountry || !selectedState) return;
 
-      for (const code in airportData) {
-        const airport = airportData[code];
-        if (
-          airport.country?.trim().toUpperCase() === selectedCountry &&
-          airport.state?.trim().toUpperCase() === selectedState
-        ) {
-          const label = `${code} - ${airport.airport_name}`;
-          const option = document.createElement("option");
-          option.value = code;
-          option.textContent = label;
-          airportSelect.appendChild(option);
-        }
-      }
+      const filtered = Object.entries(airportData).filter(([code, airport]) => 
+        airport.country?.toUpperCase() === selectedCountry &&
+        airport.state?.toUpperCase() === selectedState
+      );
+
+      filtered.sort((a, b) => a[0].localeCompare(b[0])).forEach(([code, airport]) => {
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = `${code} - ${airport.airport_name}`;
+        airportSelect.appendChild(option);
+      });
 
       airportSelect.disabled = false;
+      airportSelect.addEventListener("change", showAirportInfo);
     }
 
-    loadData();
+    function showAirportInfo() {
+      const code = airportSelect.value;
+      if (!code || !airportData[code]) {
+        airportInfo.innerHTML = "";
+        return;
+      }
+
+      const a = airportData[code];
+      const runways = a.runways.map(rwy => 
+        `Runway ${rwy.rwy_id}: ${rwy.length} ft x ${rwy.width} ft, ${rwy.surface} (${rwy.condition})`
+      ).join("<br>");
+
+      airportInfo.innerHTML = `
+        <h3>${code} - ${a.airport_name}</h3>
+        <p><strong>City:</strong> ${a.city}<br>
+        <strong>State:</strong> ${a.state}<br>
+        <strong>Country:</strong> ${a.country}<br>
+        <strong>Latitude:</strong> ${a.lat}<br>
+        <strong>Longitude:</strong> ${a.lon}<br>
+        <strong>Airspace:</strong> ${a.airspace}<br>
+        <strong>Remarks:</strong> ${a.remarks || "None"}</p>
+        <p><strong>Runways:</strong><br>${runways}</p>
+      `;
+    }
+
+    loadAirportData();
   </script>
 </body>
 </html>
