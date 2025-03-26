@@ -1,5 +1,12 @@
 let airportData = {};
 
+let map, marker;
+let minCircle, maxCircle;
+let maskLayer, minLabel, maxLabel;
+
+let destinationMarkers = [];
+
+
 async function loadData() {
   try {
 //    const response = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/main/json_data/airport_base_info_with_runways_airspace.json");
@@ -55,6 +62,8 @@ async function loadData() {
       <strong>Runways:</strong><br>
       ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
     `;
+    updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
+
   });
 
   // Default selection
@@ -75,6 +84,81 @@ async function loadData() {
       }, 50);
     }
   }, 50);
+}
+
+function initMap() {
+  map = L.map("map").setView([39.8283, -98.5795], 6); // Centered on U.S.
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
+}
+
+function updateMap(lat, lon, label) {
+  if (!map) return;
+
+  map.setView([lat, lon], 9);
+
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
+
+  refreshDistanceCircles(); // ← draw circles immediately
+  addMapLegend();
+}
+
+
+function refreshDistanceCircles() {
+  if (!map || !marker) return;
+
+  const latlng = marker.getLatLng();
+  const minNM = parseFloat(document.getElementById("firstLegMin").value);
+  const maxNM = parseFloat(document.getElementById("firstLegMax").value);
+  const minMeters = minNM * 1852;
+  const maxMeters = maxNM * 1852;
+
+  // Remove existing layers
+  [minCircle, maxCircle, minLabel, maxLabel, maskLayer].forEach(layer => {
+    if (layer) map.removeLayer(layer);
+  });
+
+  // ✅ Thick green dashed circle (min distance)
+  minCircle = L.circle(latlng, {
+    radius: minMeters,
+    color: "green",
+    fill: false,
+    weight: 3,
+    dashArray: "6 6"
+  }).addTo(map);
+
+  // ✅ Thick red dashed circle (max distance)
+  maxCircle = L.circle(latlng, {
+    radius: maxMeters,
+    color: "red",
+    fill: false,
+    weight: 3,
+    dashArray: "6 6"
+  }).addTo(map);
+
+  // ✅ Min distance label at center
+  const latOffset1 = (minMeters / 1852) / 60;
+  minLabel = L.marker([latlng.lat + latOffset1, latlng.lng], {
+    icon: L.divIcon({
+      className: 'circle-label',
+      html: `<div style="color: green; font-size: 14px; font-weight: bold;">${minNM} NM</div>`,
+      iconAnchor: [0, 0]
+    })
+  }).addTo(map);
+
+  // ✅ Max distance label at top edge
+  const latOffset2 = (maxMeters / 1852) / 60;
+  maxLabel = L.marker([latlng.lat + latOffset2, latlng.lng], {
+    icon: L.divIcon({
+      className: 'circle-label',
+      html: `<div style="color: red; font-size: 14px; font-weight: bold;">${maxNM} NM</div>`,
+      iconAnchor: [0, 0]
+    })
+  }).addTo(map);
 }
 
 function populateSelect(id, items, values) {
@@ -312,6 +396,77 @@ function findDestinations() {
 function displayResults(results) {
   const div = document.getElementById("resultArea");
   const tripType = document.querySelector('input[name="tripType"]:checked').value;
+            
+  if (results.length === 0) {
+    div.innerHTML = "<p>🚫 No matching destination airports found.</p>";
+    return;
+  }
+      
+  results.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+      
+  let html = `<p>✅ ${results.length} destination(s) found:</p><ul>`;
+  results.forEach((r, i) => {
+    html += `
+      <li>
+        <label>
+          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""}>
+          <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft  
+        </label>
+      </li>
+    `;
+  });
+  html += "</ul>";
+  
+  div.innerHTML = html;
+
+// 🔁 Clear previous markers
+destinationMarkers.forEach(m => map.removeLayer(m));
+destinationMarkers = [];
+
+// 🛩 Add markers for each matching airport
+results.forEach(r => {
+  const ap = airportData[r.code];
+  const color = getAirspaceColor(ap.airspace);
+
+  const marker = L.circleMarker([ap.lat, ap.lon], {
+    radius: 6,
+    color: color,
+    fillColor: color,
+    fillOpacity: 0.9,
+    weight: 1
+  })
+  .addTo(map)
+  .bindPopup(`<strong>${r.code}</strong><br>${ap.airport_name}<br>${r.distance} NM<br>Class ${ap.airspace}`);
+
+  destinationMarkers.push(marker);
+});
+
+// Show second-leg button only if trip type is "two"
+  const secondBtn = document.getElementById("secondLegBtn");
+  if (tripType === "two") {
+  // Hide the button initially
+    secondBtn.style.display = "none";
+ 
+  // Listen for radio selection
+    const radios = document.querySelectorAll('input[name="firstLeg"]');
+    radios.forEach(radio => {
+      radio.addEventListener("change", () => {
+        secondBtn.style.display = "inline-block";
+      });
+    });
+
+  // Auto-select first option and show button
+    if (radios.length > 0) {
+      radios[0].checked = true;
+      secondBtn.style.display = "inline-block";
+    }
+  }
+  window.matchedDestinations = results;
+}
+
+function displayResults1(results) {
+  const div = document.getElementById("resultArea");
+  const tripType = document.querySelector('input[name="tripType"]:checked').value;
   
   if (results.length === 0) {
     div.innerHTML = "<p>🚫 No matching destination airports found.</p>";
@@ -510,10 +665,58 @@ function getMaxRunway(runways) {
   return Math.max(...runways.map(r => parseInt(r.length || 0)));
 }
 
+function getAirspaceColor(classCode) {
+  switch (classCode) {
+    case "B": return "#3399FF"; // Bright blue
+    case "C": return "#FF3333"; // Bright red
+    case "D": return "#0000FF"; // Bright blue
+    case "E": return "#FF00FF"; // Magenta
+    case "G": return "#AAAAAA"; // Light gray
+    default: return "#666666";
+  }
+}
+
+function addMapLegend() {
+  const legend = L.control({ position: "bottomright" });
+
+  legend.onAdd = function () {
+    const div = L.DomUtil.create("div", "info legend");
+    const airspaceClasses = ["B", "C", "D", "E", "G"];
+    const labels = {
+      B: "Class B",
+      C: "Class C",
+      D: "Class D",
+      E: "Class E",
+      G: "Class G"
+    };
+
+    div.innerHTML += "<strong>Airspace Classes</strong><br>";
+
+    airspaceClasses.forEach(c => {
+      const color = getAirspaceColor(c);
+      div.innerHTML +=
+        `<i style="background:${color}; width: 12px; height: 12px; display: inline-block; margin-right: 6px;"></i>${labels[c]}<br>`;
+    });
+
+    return div;
+  };
+
+  legend.addTo(map);
+}
+
+
+
 window.onload = () => {
+  initMap();
   loadData();
   updateFirstLegLabel();
   syncTotalLegLabel();
+  // Update map circles when sliders or inputs change
+  document.getElementById("firstLegMin").addEventListener("input", refreshDistanceCircles);
+  document.getElementById("firstLegMax").addEventListener("input", refreshDistanceCircles);
+  document.getElementById("firstLegMinInput").addEventListener("input", refreshDistanceCircles);
+  document.getElementById("firstLegMaxInput").addEventListener("input", refreshDistanceCircles);
+
 };
 
   window.addEventListener("DOMContentLoaded", () => {
