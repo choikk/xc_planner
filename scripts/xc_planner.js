@@ -5,6 +5,7 @@ let minCircle, maxCircle;
 let maskLayer, minLabel, maxLabel;
 
 let destinationMarkers = [];
+let legLine;
 
 
 async function loadData() {
@@ -98,7 +99,7 @@ function initMap() {
 function updateMap(lat, lon, label) {
   if (!map) return;
 
-  map.setView([lat, lon], 9);
+  map.setView([lat, lon], 8);
 
   if (marker) map.removeLayer(marker);
   marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
@@ -396,58 +397,74 @@ function findDestinations() {
 function displayResults(results) {
   const div = document.getElementById("resultArea");
   const tripType = document.querySelector('input[name="tripType"]:checked').value;
-            
+
   if (results.length === 0) {
     div.innerHTML = "<p>🚫 No matching destination airports found.</p>";
     return;
   }
-      
+
   results.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
-      
+
   let html = `<p>✅ ${results.length} destination(s) found:</p><ul>`;
   results.forEach((r, i) => {
     html += `
       <li>
         <label>
-          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""}>
-          <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft  
+          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""} onchange="highlightAirport('${r.code}')">
+          <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft
         </label>
       </li>
     `;
   });
   html += "</ul>";
-  
+
   div.innerHTML = html;
 
-// 🔁 Clear previous markers
-destinationMarkers.forEach(m => map.removeLayer(m));
-destinationMarkers = [];
+  // 🔁 Clear previous markers
+  destinationMarkers.forEach(m => map.removeLayer(m));
+  destinationMarkers = [];
 
-// 🛩 Add markers for each matching airport
-results.forEach(r => {
-  const ap = airportData[r.code];
-  const color = getAirspaceColor(ap.airspace);
+  // 🛩 Add markers for each matching airport
+  results.forEach(r => {
+    const ap = airportData[r.code];
+    const color = getAirspaceColor(ap.airspace);
 
-  const marker = L.circleMarker([ap.lat, ap.lon], {
-    radius: 6,
-    color: color,
-    fillColor: color,
-    fillOpacity: 0.9,
-    weight: 1
-  })
-  .addTo(map)
-  .bindPopup(`<strong>${r.code}</strong><br>${ap.airport_name}<br>${r.distance} NM<br>Class ${ap.airspace}`);
+    const marker = L.circleMarker([ap.lat, ap.lon], {
+      radius: 6,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.9,
+      weight: 1
+    })
+    .addTo(map)
+    .bindPopup(`
+      <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
+      ${ap.airport_name}<br><br>
+      <u>Runways</u><br>
+      ${ap.runways.map(rwy => `
+        ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
+      `).join("<br>")}
+    `);
 
-  destinationMarkers.push(marker);
-});
+    marker.airportCode = r.code;
 
-// Show second-leg button only if trip type is "two"
+    marker.on("click", () => {
+      const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        highlightAirport(r.code); // also show popup
+      }
+    });
+
+    destinationMarkers.push(marker);
+  });
+
+  // Show second-leg button only if trip type is "two"
   const secondBtn = document.getElementById("secondLegBtn");
   if (tripType === "two") {
-  // Hide the button initially
     secondBtn.style.display = "none";
- 
-  // Listen for radio selection
+
     const radios = document.querySelectorAll('input[name="firstLeg"]');
     radios.forEach(radio => {
       radio.addEventListener("change", () => {
@@ -455,61 +472,12 @@ results.forEach(r => {
       });
     });
 
-  // Auto-select first option and show button
     if (radios.length > 0) {
       radios[0].checked = true;
       secondBtn.style.display = "inline-block";
     }
   }
-  window.matchedDestinations = results;
-}
 
-function displayResults1(results) {
-  const div = document.getElementById("resultArea");
-  const tripType = document.querySelector('input[name="tripType"]:checked').value;
-  
-  if (results.length === 0) {
-    div.innerHTML = "<p>🚫 No matching destination airports found.</p>";
-    return;
-  } 
-      
-  results.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
-      
-  let html = `<p>✅ ${results.length} destination(s) found:</p><ul>`;
-  results.forEach((r, i) => {
-    html += `
-      <li>
-        <label>
-          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""}>
-          <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft  
-        </label>
-      </li>
-    `;
-  });
-  html += "</ul>";
-    
-  div.innerHTML = html;
-    
-// Show second-leg button only if trip type is "two"
-  const secondBtn = document.getElementById("secondLegBtn");
-  if (tripType === "two") {
-  // Hide the button initially
-    secondBtn.style.display = "none";
-  
-  // Listen for radio selection
-    const radios = document.querySelectorAll('input[name="firstLeg"]');
-    radios.forEach(radio => {
-      radio.addEventListener("change", () => {
-        secondBtn.style.display = "inline-block";
-      });
-    });
-    
-  // Auto-select first option and show button
-    if (radios.length > 0) {
-      radios[0].checked = true;
-      secondBtn.style.display = "inline-block";
-    }
-  }
   window.matchedDestinations = results;
 }
 
@@ -702,6 +670,45 @@ function addMapLegend() {
   };
 
   legend.addTo(map);
+}
+
+function highlightAirport(code) {
+  const marker = destinationMarkers.find(m => m.airportCode === code);
+  if (!marker) return;
+
+  // Open popup and zoom
+  marker.openPopup();
+  map.setView(marker.getLatLng(), map.getZoom());
+
+  const ap = airportData[code];
+  const homeCode = document.getElementById("airportSelect").value;
+  const homeAp = airportData[homeCode];
+
+  if (!ap || !homeAp) return;
+
+  // Remove existing leg line if any
+  if (legLine) map.removeLayer(legLine);
+
+  // Draw a straight magenta line
+  legLine = L.polyline([[homeAp.lat, homeAp.lon], [ap.lat, ap.lon]], {
+    color: "#FF00FF", // Magenta
+    weight: 5,
+//    dashArray: "5, 5",
+    opacity: 0.8
+  }).addTo(map);
+}
+
+function formatSurface(code) {
+  switch (code) {
+    case "ASPH": return "Asphalt";
+    case "CONC": return "Concrete";
+    case "TURF": return "Grass";
+    case "GRVL": return "Gravel";
+    case "DIRT": return "Dirt";
+    case "WATER": return "Water";
+    case "OTHER": return "Other";
+    default: return code;
+  }
 }
 
 
