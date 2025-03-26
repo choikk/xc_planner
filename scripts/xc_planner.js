@@ -11,6 +11,7 @@ let secondLegMarkers = [];
 let legLine;
 
 let legendAdded = false;
+let secondLegRing;
 
 
 async function loadData() {
@@ -410,7 +411,9 @@ function displayResults(results) {
 
   results.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
 
-  let html = `<p>✅ ${results.length} destination(s) found:</p><ul>`;
+//  let html = `<p>✅ ${results.length} destination(s) found:</p><ul>`;
+  let html = `<p>✅ ${results.length} destination(s) found:</p><ul class="result-list">`;
+
   results.forEach((r, i) => {
     html += `
       <li>
@@ -541,13 +544,6 @@ function findSecondLeg() {
         fromCode: firstLegCode,
         homeCode: baseCode
       });
-//      secondLegResults.push({
-//        code,
-//        name: airport.airport_name,
-//        city: airport.city,
-//        state: airport.state,
-//        totalDistance: totalDistance.toFixed(1),
-//      });
     }
   }
 
@@ -598,10 +594,12 @@ function displaySecondLegResults(results) {
     const ap = airportData[r.code];
     const color = getAirspaceColor(ap.airspace);
 
-    const squareSize = 0.03; // degrees
+    const latOffset = 0.025;
+    const lonOffset = latOffset / Math.cos(ap.lat * Math.PI / 180);
+
     const squareMarker = L.rectangle([
-      [ap.lat + squareSize, ap.lon - squareSize],
-      [ap.lat - squareSize, ap.lon + squareSize]
+      [ap.lat + latOffset, ap.lon - lonOffset],
+      [ap.lat - latOffset, ap.lon + lonOffset]
     ], {
       color: color,
       weight: 1,
@@ -643,6 +641,10 @@ function drawTriangle(firstCode, secondCode, homeCode) {
   const second = airportData[secondCode];
   const home = airportData[homeCode];
 
+  if (legLine) {
+    map.removeLayer(legLine);
+  }
+
   if (!first || !second || !home) {
     console.warn("One or more airports are missing:", { firstCode, secondCode, homeCode });
     return;
@@ -673,7 +675,71 @@ function drawTriangle(firstCode, secondCode, homeCode) {
 
     triangleLines.push(line);
   });
+
+  const firstAp = airportData[firstCode];
+  const homeAp = airportData[homeCode];
+  const leg1Distance = haversine(homeAp.lat, homeAp.lon, firstAp.lat, firstAp.lon);
+
+  const totalMin = parseFloat(document.getElementById("totalLegMin").value);
+  const totalMax = parseFloat(document.getElementById("totalLegMax").value);
+
+  const remainingMin = Math.max(totalMin - leg1Distance, 0);
+  const remainingMax = Math.max(totalMax - leg1Distance, 0);
+
+console.log("Calling drawSecondLegRing with:", {
+  firstCode, homeCode,
+  leg1Distance,
+  remainingMin,
+  remainingMax
+});
+
+  drawSecondLegRing(firstAp, remainingMin, remainingMax);
+
 }
+
+function drawSecondLegRing(centerAirport, minNM, maxNM) {
+  if (!centerAirport || !centerAirport.lat || !centerAirport.lon) return;
+
+  // Remove existing ring if any
+  if (secondLegRing) {
+    map.removeLayer(secondLegRing);
+    secondLegRing = null;
+  }
+
+  const center = [centerAirport.lat, centerAirport.lon];
+  const minMeters = Math.max(minNM, 0) * 1852;
+  const maxMeters = Math.max(maxNM, 0) * 1852;
+
+  // Outer bounding box (world-sized rectangle)
+  const outerRing = [
+    [90, -360],
+    [90, 360],
+    [-90, 360],
+    [-90, -360],
+    [90, -360]
+  ];
+
+  // Convert Leaflet circles to GeoJSON coordinates
+  const inner = L.circle(center, { radius: minMeters }).toGeoJSON().geometry.coordinates[0];
+  const outer = L.circle(center, { radius: maxMeters }).toGeoJSON().geometry.coordinates[0];
+
+  const mask = {
+    type: "Feature",
+    geometry: {
+      type: "Polygon",
+      coordinates: [outer, inner]
+    }
+  };
+
+  secondLegRing = L.geoJSON(mask, {
+    style: {
+      fillColor: "#999",
+      fillOpacity: 0.3,
+      stroke: false
+    }
+  }).addTo(map);
+}
+
 
 function syncTotalLegLabel() {
   const min = document.getElementById("totalLegMin").value;
@@ -800,6 +866,10 @@ function highlightAirport(code) {
 
   // Remove existing leg line if any
   if (legLine) map.removeLayer(legLine);
+  if (triangleLines && triangleLines.length > 0) {
+    triangleLines.forEach(line => map.removeLayer(line));
+    triangleLines = [];
+  }
 
   // Draw a straight magenta line
   legLine = L.polyline([[homeAp.lat, homeAp.lon], [ap.lat, ap.lon]], {
