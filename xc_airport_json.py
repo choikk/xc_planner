@@ -29,9 +29,17 @@ df_base = df_base.dropna(subset=["AirportCode", "LAT_DECIMAL", "LONG_DECIMAL", "
 # === LOAD RUNWAY DATA ===
 df_rwy = pd.read_csv(apt_rwy_csv, dtype=str)
 df_rwy = df_rwy[["SITE_NO", "RWY_ID", "RWY_LEN", "RWY_WIDTH", "SURFACE_TYPE_CODE", "COND"]]
+df_rwy["COND"] = df_rwy["COND"].fillna("").str.strip().str.upper()
+df_rwy["SURFACE_TYPE_CODE"] = df_rwy["SURFACE_TYPE_CODE"].fillna("").str.strip().str.upper()
 
 rwy_dict = {}
 for _, row in df_rwy.iterrows():
+    if "X" in row["RWY_ID"] or "H" in row["RWY_ID"]:
+        continue  # Skip runways with X or H in the ID
+
+    if not row["RWY_LEN"] or row["RWY_LEN"].strip() == "0":
+        continue  # Skip if length is missing or zero
+
     rwy_info = {
         "rwy_id": row["RWY_ID"],
         "length": row["RWY_LEN"],
@@ -43,6 +51,7 @@ for _, row in df_rwy.iterrows():
 
 # === LOAD AIRSPACE DATA ===
 df_cls = pd.read_csv(cls_arsp_csv, dtype=str)
+df_cls["REMARK"] = df_cls["REMARK"].fillna("").str.strip()
 
 # Determine highest airspace class
 def determine_airspace(row):
@@ -87,7 +96,8 @@ for _, row in df_base.iterrows():
         "lat": float(row["LAT_DECIMAL"]),
         "lon": float(row["LONG_DECIMAL"]),
         "city": str(row.get("CITY", "")).strip(),
-        "state": str(row.get("STATE_CODE", "")).strip(),
+        "state":  str(row.get("STATE_NAME",  "")).strip(),
+        "country":str(row.get("COUNTRY_CODE","")).strip(),
         "airport_name": str(row.get("ARPT_NAME", "")).strip(),
         "runways": rwy_dict.get(site_no, []),
         "airspace": airspace["airspace"],
