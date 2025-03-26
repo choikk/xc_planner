@@ -1,3 +1,6 @@
+const APP_VERSION = "v1.1.0"; // or whatever you like
+const FILE_DATE = new Date().toISOString().split("T")[0];
+
 let airportData = {};
 
 let map, marker;
@@ -812,7 +815,7 @@ function getAirspaceColor(classCode) {
     case "C": return "#FF3333"; // Bright red
     case "D": return "#0000FF"; // Bright blue
     case "E": return "#FF00FF"; // Magenta
-    case "G": return "#AAAAAA"; // Light gray
+    case "G": return "#777777"; // Gray
     default: return "#666666";
   }
 }
@@ -893,6 +896,15 @@ function formatSurface(code) {
   }
 }
 
+function showCredits() {
+  alert(`🛫 Time Building Planner
+
+Version: ${APP_VERSION}
+Last Updated: ${FILE_DATE}
+© 2025 pilot.drchoi@gmail.com
+Built with 💻 + ✈️
+All rights reserved.`);
+}
 
 
 window.onload = () => {
