@@ -11,26 +11,53 @@
     .range-wrapper { display: flex; flex-direction: column; gap: 5px; }
     .inline-radio label { display: inline-block; margin-right: 20px; }
     input[type="number"] { width: 60px; }
+    .circle-label {
+      pointer-events: none;
+      white-space: nowrap;
+    }
+  .legend {
+    background: white;
+    padding: 8px;
+    font-size: 12px;
+    line-height: 1.5em;
+    border-radius: 5px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.15);
+  }
+  .legend i {
+    border: 1px solid #ccc;
+  }
   </style>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+></script>
+
 </head>
-<body>
-  <h2>Home Base Airport</h2>
-  <section>
-    <label>Country:
-      <select id="countrySelect"></select>
-    </label>
-    <label>State:
-      <select id="stateSelect"></select>
-    </label>
-    <label>Airport:
-      <select id="airportSelect"></select>
-    </label>
-    <div id="homeBaseInfo" style="margin-top: 10px; font-size: 0.9em; color: #333;"></div>
-  </section>
+<body style="margin: 0; padding: 0;">
+  <div style="display: flex; height: 100vh; overflow: hidden;">
+  <div style="flex: 0 0 40%; padding: 10px; overflow-y: auto;">
 
-  <hr>
+    <!-- LEFT: Controls + results -->
+    <div style="flex: 1; padding: 20px; overflow-y: auto;">
+      <h2>Home Base Airport</h2>
+      <section>
+        <label>Country:
+          <select id="countrySelect"></select>
+        </label>
+        <label>State:
+          <select id="stateSelect"></select>
+        </label>
+        <label>Airport:
+          <select id="airportSelect"></select>
+        </label>
+        <div id="homeBaseInfo" style="margin-top: 10px; font-size: 0.9em; color: #333;"></div>
+      </section>
 
-  <h2>Destination Criteria</h2>
+      <hr>
+
   <section>
     <div>
       <strong>Surface Type:</strong><br>
@@ -102,15 +129,23 @@
     <button id="secondLegBtn" style="display: none;" onclick="findSecondLeg()">Find Second Leg Destinations</button>
   </div>
 
-
-  <hr>
-  <h2>Matching Airports</h2>
-  <div id="resultArea">
-    <p>No destinations yet. Click "Find Destinations" to search.</p>
+      <hr>
+      <h2>Matching Airports</h2>
+      <div id="resultArea">
+        <p>No destinations yet. Click "Find Destinations" to search.</p>
+      </div>
+      <div id="secondLegArea" style="margin-top: 20px;"></div>
+    </div>
+</div>
+    <!-- RIGHT: Map -->
+    <div style="flex: 1; min-width: 400px;">
+      <div id="map" style="height: 100%; width: 100%;"></div>
+    </div>
   </div>
-  <div id="secondLegArea" style="margin-top: 20px;"></div>
+
 
   <script src="scripts/xc_planner.js"></script>
 </body>
+
 </html>
 
