@@ -1,140 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Airport Info Viewer</title>
+  <meta charset="UTF-8" />
+  <title>XC Planner</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    section { margin-bottom: 30px; }
+    label { display: block; margin-top: 10px; }
+    .slider-container { margin-top: 10px; }
+    .range-wrapper { display: flex; flex-direction: column; gap: 5px; }
+    .inline-radio label { display: inline-block; margin-right: 20px; }
+    input[type="number"] { width: 60px; }
+  </style>
 </head>
 <body>
-  <h2>Select Airport</h2>
+  <h2>Home Base Airport</h2>
+  <section>
+    <label>Country:
+      <select id="countrySelect"></select>
+    </label>
+    <label>State:
+      <select id="stateSelect"></select>
+    </label>
+    <label>Airport:
+      <select id="airportSelect"></select>
+    </label>
+    <div id="homeBaseInfo" style="margin-top: 10px; font-size: 0.9em; color: #333;"></div>
+  </section>
 
-  <label for="countrySelect">Country:</label><br>
-  <select id="countrySelect">
-    <option value="">-- Select Country --</option>
-  </select><br><br>
+  <hr>
 
-  <label for="stateSelect">State:</label><br>
-  <select id="stateSelect" disabled>
-    <option value="">-- Select State --</option>
-  </select><br><br>
+  <h2>Destination Criteria</h2>
+  <section>
+    <div>
+      <strong>Surface Type:</strong><br>
+      <label><input type="checkbox" class="surface" value="ASPH" checked> Asphalt</label>
+      <label><input type="checkbox" class="surface" value="CONC" checked> Concrete</label>
+      <label><input type="checkbox" class="surface" value="TURF"> Grass</label>
+      <label><input type="checkbox" class="surface" value="OTHER"> Other</label>
+    </div>
 
-  <label for="airportSelect">Airport:</label><br>
-  <select id="airportSelect" disabled>
-    <option value="">-- Select Airport --</option>
-  </select><br><br>
+    <div style="margin-top: 15px;">
+      <strong>Airspace Classes:</strong><br>
+      <label><input type="checkbox" class="airspace" value="B"> Class B</label>
+      <label><input type="checkbox" class="airspace" value="C"> Class C</label>
+      <label><input type="checkbox" class="airspace" value="D"> Class D</label>
+      <label><input type="checkbox" class="airspace" value="E" checked> Class E</label>
+      <label><input type="checkbox" class="airspace" value="G" checked> Class G</label>
+    </div>
 
-  <div id="airportInfo"></div>
+    <div class="slider-container">
+      <label>Minimum Runway Length (ft):
+        <input type="range" id="minRunwayLength" min="500" max="15000" step="100" value="3000" oninput="updateLabel('runwayLabel', this.value)">
+        <span id="runwayLabel">3000</span> ft
+      </label>
+    </div>
 
-  <script>
-    let airportData = {};
-    const countrySelect = document.getElementById("countrySelect");
-    const stateSelect = document.getElementById("stateSelect");
-    const airportSelect = document.getElementById("airportSelect");
-    const airportInfo = document.getElementById("airportInfo");
+    <div style="margin-top: 20px;" class="inline-radio">
+      <strong>Trip Type:</strong>
+      <label><input type="radio" id="tripOne" name="tripType" value="one" checked onchange="toggleTotalLeg()"> One Destination (Round Trip)</label>
+      <label><input type="radio" id="tripTriangle" name="tripType" value="two" onchange="toggleTotalLeg()"> Two Destinations (Triangle Trip)</label>
+    </div>
 
-    async function loadAirportData() {
-      const res = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/refs/heads/main/json_data/airport_base_info_with_runways_airspace.json");
-      airportData = await res.json();
-      populateCountries();
-    }
+    <!-- First Leg Distance -->
+    <div class="slider-container" id="firstLegSlider">
+      <label>First Leg Distance (NM):</label>
+      <div class="range-wrapper">
+        <div style="display: flex; gap: 10px;">
+          <input type="range" id="firstLegMin" min="10" max="500" step="10" value="50" oninput="syncFirstLegInputsFromSlider()">
+          <input type="range" id="firstLegMax" min="10" max="500" step="10" value="100" oninput="syncFirstLegInputsFromSlider()">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 5px;">
+          <input type="number" id="firstLegMinInput" min="10" max="500" step="10" value="50" onchange="syncFirstLegSlidersFromInput()">
+          <span>–</span>
+          <input type="number" id="firstLegMaxInput" min="10" max="500" step="10" value="100" onchange="syncFirstLegSlidersFromInput()">
+        </div>
+        <span id="firstLegLabel">50 - 100 NM</span>
+      </div>
+    </div>
 
-    function populateCountries() {
-      const countries = new Set();
-      for (const code in airportData) {
-        const country = airportData[code].country?.trim().toUpperCase();
-        if (country) countries.add(country);
-      }
+    <!-- Total Trip Distance -->
+    <div class="slider-container" id="totalTripSlider" style="display: none;">
+      <label>Total Trip Distance (NM):</label>
+      <div class="range-wrapper">
+        <div style="display: flex; gap: 10px;">
+          <input type="range" id="totalLegMin" min="20" max="1500" step="10" value="150" oninput="updateTotalLegLabel()">
+          <input type="range" id="totalLegMax" min="20" max="1500" step="10" value="200" oninput="updateTotalLegLabel()">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 5px;">
+          <input type="number" id="totalLegMinInput" min="20" max="1500" step="10" value="150" onchange="syncTotalLegSlidersFromInput()">
+          <span>–</span>
+          <input type="number" id="totalLegMaxInput" min="20" max="1500" step="10" value="200" onchange="syncTotalLegSlidersFromInput()">
+        </div>
+        <span id="totalLegLabel">150 - 200 NM</span>
+      </div>
+    </div>
+  </section>
 
-      Array.from(countries).sort().forEach(c => {
-        const option = document.createElement("option");
-        option.value = c;
-        option.textContent = c;
-        countrySelect.appendChild(option);
-      });
+  <div style="margin-top: 20px; display: flex; gap: 10px;">
+    <button id="findBtn" onclick="findDestinations()">Find First Leg Destinations</button>
+    <button id="secondLegBtn" style="display: none;" onclick="findSecondLeg()">Find Second Leg Destinations</button>
+  </div>
 
-      countrySelect.addEventListener("change", populateStates);
-    }
 
-    function populateStates() {
-      stateSelect.innerHTML = '<option value="">-- Select State --</option>';
-      airportSelect.innerHTML = '<option value="">-- Select Airport --</option>';
-      stateSelect.disabled = true;
-      airportSelect.disabled = true;
-      airportInfo.innerHTML = "";
+  <hr>
+  <h2>Matching Airports</h2>
+  <div id="resultArea">
+    <p>No destinations yet. Click "Find Destinations" to search.</p>
+  </div>
+  <div id="secondLegArea" style="margin-top: 20px;"></div>
 
-      const selectedCountry = countrySelect.value;
-      if (!selectedCountry) return;
-
-      const states = new Set();
-      for (const code in airportData) {
-        const airport = airportData[code];
-        if (airport.country?.toUpperCase() === selectedCountry) {
-          states.add(airport.state?.toUpperCase());
-        }
-      }
-
-      Array.from(states).sort().forEach(s => {
-        const option = document.createElement("option");
-        option.value = s;
-        option.textContent = s;
-        stateSelect.appendChild(option);
-      });
-
-      stateSelect.disabled = false;
-      stateSelect.addEventListener("change", populateAirports);
-    }
-
-    function populateAirports() {
-      airportSelect.innerHTML = '<option value="">-- Select Airport --</option>';
-      airportInfo.innerHTML = "";
-      airportSelect.disabled = true;
-
-      const selectedCountry = countrySelect.value;
-      const selectedState = stateSelect.value;
-
-      if (!selectedCountry || !selectedState) return;
-
-      const filtered = Object.entries(airportData).filter(([code, airport]) => 
-        airport.country?.toUpperCase() === selectedCountry &&
-        airport.state?.toUpperCase() === selectedState
-      );
-
-      filtered.sort((a, b) => a[0].localeCompare(b[0])).forEach(([code, airport]) => {
-        const option = document.createElement("option");
-        option.value = code;
-        option.textContent = `${code} - ${airport.airport_name}`;
-        airportSelect.appendChild(option);
-      });
-
-      airportSelect.disabled = false;
-      airportSelect.addEventListener("change", showAirportInfo);
-    }
-
-    function showAirportInfo() {
-      const code = airportSelect.value;
-      if (!code || !airportData[code]) {
-        airportInfo.innerHTML = "";
-        return;
-      }
-
-      const a = airportData[code];
-      const runways = a.runways.map(rwy => 
-        `Runway ${rwy.rwy_id}: ${rwy.length} ft x ${rwy.width} ft, ${rwy.surface} (${rwy.condition})`
-      ).join("<br>");
-
-      airportInfo.innerHTML = `
-        <h3>${code} - ${a.airport_name}</h3>
-        <p><strong>City:</strong> ${a.city}<br>
-        <strong>State:</strong> ${a.state}<br>
-        <strong>Country:</strong> ${a.country}<br>
-        <strong>Latitude:</strong> ${a.lat}<br>
-        <strong>Longitude:</strong> ${a.lon}<br>
-        <strong>Airspace:</strong> ${a.airspace}<br>
-        <strong>Remarks:</strong> ${a.remarks || "None"}</p>
-        <p><strong>Runways:</strong><br>${runways}</p>
-      `;
-    }
-
-    loadAirportData();
-  </script>
+  <script src="scripts/xc_planner.js"></script>
 </body>
 </html>
+
