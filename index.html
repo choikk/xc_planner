@@ -26,6 +26,9 @@
   .legend i {
     border: 1px solid #ccc;
   }
+  .result-list {
+    font-size: 0.9em;
+  }
   </style>
 <link
   rel="stylesheet"
@@ -84,7 +87,7 @@
     </div>
 
     <div style="margin-top: 20px;" class="inline-radio">
-      <strong>Trip Type:</strong>
+      <strong>Trip Type:</strong><br>
       <label><input type="radio" id="tripOne" name="tripType" value="one" checked onchange="toggleTotalLeg()"> One Destination (Round Trip)</label>
       <label><input type="radio" id="tripTriangle" name="tripType" value="two" onchange="toggleTotalLeg()"> Two Destinations (Triangle Trip)</label>
     </div>
