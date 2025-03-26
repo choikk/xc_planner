@@ -5,7 +5,12 @@ let minCircle, maxCircle;
 let maskLayer, minLabel, maxLabel;
 
 let destinationMarkers = [];
+let triangleLines = [];
+let secondLegMarkers = [];
+
 let legLine;
+
+let legendAdded = false;
 
 
 async function loadData() {
@@ -529,8 +534,20 @@ function findSecondLeg() {
         name: airport.airport_name,
         city: airport.city,
         state: airport.state,
+        airspace: airport.airspace,
         totalDistance: totalDistance.toFixed(1),
+        leg2Distance: firstToSecond.toFixed(1),
+        leg3Distance: secondToBase.toFixed(1),
+        fromCode: firstLegCode,
+        homeCode: baseCode
       });
+//      secondLegResults.push({
+//        code,
+//        name: airport.airport_name,
+//        city: airport.city,
+//        state: airport.state,
+//        totalDistance: totalDistance.toFixed(1),
+//      });
     }
   }
 
@@ -539,33 +556,123 @@ function findSecondLeg() {
 
 function displaySecondLegResults(results) {
   const div = document.getElementById("secondLegArea");
-  
+
   if (results.length === 0) {
     div.innerHTML = "<p>🚫 No second-leg destinations found.</p>";
     return;
-  } 
-  
+  }
+
   // ✅ Sort by distance
   results.sort((a, b) => a.totalDistance - b.totalDistance);
-    
+
   let html = `<h3>Second Leg Destinations</h3>`;
   html += `<p>✅ ${results.length} second-leg destination(s) found:</p><ul>`;
   results.forEach((r, i) => {
     html += `
       <li>
         <label>
-          <input type="radio" name="secondLeg" value="${r.code}" ${i === 0 ? "checked" : ""}>
+          <input type="radio" name="secondLeg" value="${r.code}" ${i === 0 ? "checked" : ""} onchange="drawTriangle('${r.fromCode}', '${r.code}', '${r.homeCode}')">
           <strong>${r.code}</strong> (${r.totalDistance} NM) – ${r.name}, ${r.city}, ${r.state}
         </label>
       </li>
-    `; 
-  }); 
+    `;
+  });
   html += "</ul>";
 
-  // Optional: Add a "Finalize Selection" button
   html += `<button onclick="finalizeSelection()">Confirm Final Destination</button>`;
-
   div.innerHTML = html;
+
+  // 🔁 Clear previous second-leg markers
+  if (window.secondLegMarkers) {
+    secondLegMarkers.forEach(m => map.removeLayer(m));
+  }
+  window.secondLegMarkers = [];
+
+  const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
+  const homeCode = document.getElementById("airportSelect").value;
+  const firstAp = airportData[firstCode];
+  const homeAp = airportData[homeCode];
+
+  // 🟪 Add square markers
+  results.forEach(r => {
+    const ap = airportData[r.code];
+    const color = getAirspaceColor(ap.airspace);
+
+    const squareSize = 0.03; // degrees
+    const squareMarker = L.rectangle([
+      [ap.lat + squareSize, ap.lon - squareSize],
+      [ap.lat - squareSize, ap.lon + squareSize]
+    ], {
+      color: color,
+      weight: 1,
+      fillColor: color,
+      fillOpacity: 0.9
+    }).addTo(map)
+      .bindPopup(`
+        <strong>${r.code}</strong> (Class ${ap.airspace})<br>
+        ${ap.airport_name}<br>
+        2nd Leg: ${r.leg2Distance} NM<br>
+        Return : ${r.leg3Distance} NM<br>
+        Total  : ${r.totalDistance} NM<br><br>
+        <u>Runways</u><br>
+        ${ap.runways.map(rwy => `
+          ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
+        `).join("<br>")}
+      `);
+
+    squareMarker.on("click", () => {
+      const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        drawTriangle(r.fromCode, r.code, r.homeCode);
+      }
+    });
+
+    secondLegMarkers.push(squareMarker);
+  });
+
+  // 🟪 Auto-draw triangle for first result
+  if (results.length > 0) {
+    drawTriangle(results[0].fromCode, results[0].code, results[0].homeCode);
+  }
+}
+
+function drawTriangle(firstCode, secondCode, homeCode) {
+  const first = airportData[firstCode];
+  const second = airportData[secondCode];
+  const home = airportData[homeCode];
+
+  if (!first || !second || !home) {
+    console.warn("One or more airports are missing:", { firstCode, secondCode, homeCode });
+    return;
+  }
+
+  // Clear previous lines
+  triangleLines.forEach(line => map.removeLayer(line));
+  triangleLines = [];
+
+  // Define all 3 legs
+  const legs = [
+    [home, first],
+    [first, second],
+    [second, home]
+  ];
+
+  // Draw each leg
+  legs.forEach(([from, to]) => {
+    const line = L.polyline([
+      [from.lat, from.lon],
+      [to.lat, to.lon]
+    ], {
+      color: "#FF00FF",       // Magenta
+      weight: 5,
+//      dashArray: "5, 5",
+      opacity: 0.8
+    }).addTo(map);
+
+    triangleLines.push(line);
+  });
 }
 
 function syncTotalLegLabel() {
@@ -645,6 +752,9 @@ function getAirspaceColor(classCode) {
 }
 
 function addMapLegend() {
+  if (legendAdded) return; // ✅ prevent duplicates
+  legendAdded = true;
+
   const legend = L.control({ position: "bottomright" });
 
   legend.onAdd = function () {
@@ -662,8 +772,10 @@ function addMapLegend() {
 
     airspaceClasses.forEach(c => {
       const color = getAirspaceColor(c);
-      div.innerHTML +=
-        `<i style="background:${color}; width: 12px; height: 12px; display: inline-block; margin-right: 6px;"></i>${labels[c]}<br>`;
+      div.innerHTML += `
+        <i style="background:${color}; width:12px; height:12px; display:inline-block; margin-right:6px;"></i>
+        ${labels[c]}<br>
+      `;
     });
 
     return div;
