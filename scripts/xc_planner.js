@@ -459,14 +459,50 @@ function displayResults(results) {
 
     marker.airportCode = r.code;
 
-    marker.on("click", () => {
-      const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
-      if (radio) {
-        radio.checked = true;
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        highlightAirport(r.code); // also show popup
+marker.on("click", () => {
+  const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
+  if (radio) {
+    radio.checked = true;
+    radio.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+
+    // 🧹 Clear triangle/second-leg stuff if in triangle mode
+    if (tripType === "two") {
+      // Clear second-leg results
+      document.getElementById("secondLegArea").innerHTML = "";
+
+      // Clear markers
+      if (window.secondLegMarkers) {
+        secondLegMarkers.forEach(m => map.removeLayer(m));
+        secondLegMarkers = [];
       }
-    });
+
+      // Clear triangle lines
+      triangleLines.forEach(line => map.removeLayer(line));
+      triangleLines = [];
+
+      // Clear second leg ring
+      if (secondLegRing) {
+        map.removeLayer(secondLegRing);
+        secondLegRing = null;
+      }
+
+      // 🔁 Draw new first-leg line
+      if (legLine) {
+        map.removeLayer(legLine);
+        firstLegLine = null;
+      }
+
+      const homeCode = document.getElementById("airportSelect").value;
+      const homeAp = airportData[homeCode];
+      const firstAp = airportData[r.code];
+
+      // 🟢 Auto-trigger second-leg search
+      findSecondLeg();
+    }
+  }
+});
 
     destinationMarkers.push(marker);
   });
