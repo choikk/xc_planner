@@ -100,7 +100,7 @@
       <strong>Airspace Classes:</strong><br>
       <label><input type="checkbox" class="airspace" value="B"> Class B</label>
       <label><input type="checkbox" class="airspace" value="C"> Class C</label>
-      <label><input type="checkbox" class="airspace" value="D"> Class D</label>
+      <label><input type="checkbox" class="airspace" value="D" checked> Class D</label>
       <label><input type="checkbox" class="airspace" value="E" checked> Class E</label>
       <label><input type="checkbox" class="airspace" value="G" checked> Class G</label>
     </div>
@@ -159,7 +159,7 @@
   </div>
 
       <hr>
-      <h2>Matching Airports</h2>
+      <h2>Matching Airports (Sort by distance)</h2>
       <div id="resultArea">
         <p>No destinations yet. Click "Find Destinations" to search.</p>
       </div>
@@ -171,6 +171,13 @@
       <div id="map" style="height: 100%; width: 100%;"></div>
     </div>
   </div>
+
+<button onclick="showTripSummary()">📋 Summary Report</button>
+
+<div id="summaryModal" style="display: none; position: fixed; top: 10%; left: 10%; width: 80%; background: white; border: 2px solid #333; padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.4); z-index: 9999;">
+  <button onclick="document.getElementById('summaryModal').style.display='none'" style="float: right;">❌ Close</button>
+  <div id="summaryContent" style="white-space: pre-wrap; font-family: monospace;"></div>
+</div>
 
 
   <script src="scripts/xc_planner.js"></script>
