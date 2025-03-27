@@ -83,6 +83,13 @@ async function loadData() {
     const airports = airportsByState[key] || [];
     airports.sort((a, b) => a.code.localeCompare(b.code));
     populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
+    if (airports.length > 0) {
+    // ✅ Select the first airport
+      document.getElementById("airportSelect").value = airports[0].code;
+
+    // ✅ Trigger change event to update info box and map
+      document.getElementById("airportSelect").dispatchEvent(new Event("change"));
+    }
   });
 
   document.getElementById("airportSelect").addEventListener("change", () => {
@@ -97,7 +104,7 @@ async function loadData() {
       ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
     `;
     updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-
+    resetTripState();
   });
 
   // Default selection
@@ -376,6 +383,7 @@ function syncTotalLegSlidersFromInput() {
 }
 
 function findDestinations() {
+  resetTripState(); // 🧼 Clear map, markers, UI
   const homeCode = document.getElementById("airportSelect").value;
   if (!homeCode || !airportData[homeCode]) {
     alert("Please select a valid Home Base Airport.");
@@ -498,7 +506,7 @@ function displayResults(results) {
       document.getElementById("secondLegArea").innerHTML = "";
 
       // Clear markers
-      if (window.secondLegMarkers) {
+      if (secondLegMarkers) {
         secondLegMarkers.forEach(m => map.removeLayer(m));
         secondLegMarkers = [];
       }
@@ -547,7 +555,6 @@ function displayResults(results) {
     const radios = document.querySelectorAll('input[name="firstLeg"]');
     radios.forEach(radio => {
       radio.addEventListener("change", () => {
-        secondBtn.style.display = "inline-block";
       });
     });
 
@@ -632,7 +639,7 @@ function displaySecondLegResults(results) {
   // ✅ Sort by distance
   results.sort((a, b) => a.totalDistance - b.totalDistance);
 
-  let html = `<h3>Second Leg Destinations</h3>`;
+  let html = `<h3>Second Leg Destinations (Sort by total trip distance)</h3>`;
   html += `<p>✅ ${results.length} second-leg destination(s) found:</p><ul>`;
   results.forEach((r, i) => {
     html += `
@@ -650,10 +657,10 @@ function displaySecondLegResults(results) {
   div.innerHTML = html;
 
   // 🔁 Clear previous second-leg markers
-  if (window.secondLegMarkers) {
+  if (secondLegMarkers) {
     secondLegMarkers.forEach(m => map.removeLayer(m));
   }
-  window.secondLegMarkers = [];
+  secondLegMarkers = [];
 
   const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
   const homeCode = document.getElementById("airportSelect").value;
@@ -698,7 +705,7 @@ function displaySecondLegResults(results) {
       }
     });
 
-    secondLegMarkers.push(squareMarker);
+    secondLegMarkers.push(marker);
   });
 
   // 🟪 Auto-draw triangle for first result
@@ -993,12 +1000,25 @@ function resetTripState() {
     secondLegRing = null;
   }
 
+console.log("Removing second-leg markers:", secondLegMarkers);
+
+  if (secondLegMarkers && secondLegMarkers.length) {
+    secondLegMarkers.forEach(m => map.removeLayer(m));
+    secondLegMarkers = [];
+  }
+
   // 🧹 Clear result areas
   document.getElementById("resultArea").innerHTML = `<p>No destinations yet. Click "Find Destinations" to search.</p>`;
   document.getElementById("secondLegArea").innerHTML = "";
 
   // 🧹 Hide second-leg button
   document.getElementById("secondLegBtn").style.display = "none";
+
+  const homeCode = document.getElementById("airportSelect").value;
+  const homeAp = airportData[homeCode];
+  if (homeAp) {
+    map.setView([homeAp.lat, homeAp.lon], 8); // Adjust zoom level as needed
+  }
 }
 
 
