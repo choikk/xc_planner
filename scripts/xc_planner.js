@@ -16,10 +16,33 @@ let legLine;
 let legendAdded = false;
 let secondLegRing;
 
+const squareMarker = (color) => L.divIcon({
+  className: "custom-square",
+  iconSize: [12, 12],
+  html: `<div style="
+    width: 12px;
+    height: 12px;
+    background-color: ${color};
+    border: 1px solid #333;
+    box-sizing: border-box;
+  "></div>`
+});
+
+const triangleMarker = (color) => L.divIcon({
+  className: "custom-triangle",
+  iconSize: [16, 16],
+  html: `<div style="
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 14px solid ${color};
+  "></div>`
+});
+
 
 async function loadData() {
   try {
-//    const response = await fetch("https://raw.githubusercontent.com/choikk/xc_planner/main/json_data/airport_base_info_with_runways_airspace.json");
     const response = await fetch("json_data/airport_base_info_with_runways_airspace.json");
     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
     airportData = await response.json();
@@ -58,6 +81,7 @@ async function loadData() {
   document.getElementById("stateSelect").addEventListener("change", () => {
     const key = `${document.getElementById("countrySelect").value}-${document.getElementById("stateSelect").value}`;
     const airports = airportsByState[key] || [];
+    airports.sort((a, b) => a.code.localeCompare(b.code));
     populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
   });
 
@@ -450,20 +474,21 @@ function displayResults(results) {
     .addTo(map)
     .bindPopup(`
       <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
-      ${ap.airport_name}<br><br>
+      ${ap.airport_name}<br>
+      Total: ${r.distance*2} NM<br><br>
       <u>Runways</u><br>
       ${ap.runways.map(rwy => `
-        ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
+        <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
       `).join("<br>")}
     `);
 
     marker.airportCode = r.code;
 
-marker.on("click", () => {
-  const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
-  if (radio) {
-    radio.checked = true;
-    radio.scrollIntoView({ behavior: "smooth", block: "center" });
+  marker.on("click", () => {
+    const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
+    if (radio) {
+      radio.checked = true;
+      radio.scrollIntoView({ behavior: "smooth", block: "center" });
 
     const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
 
@@ -500,6 +525,13 @@ marker.on("click", () => {
 
       // 🟢 Auto-trigger second-leg search
       findSecondLeg();
+    }else{
+      // 🔁 Draw new first-leg line
+      if (legLine) {
+        map.removeLayer(legLine);
+        firstLegLine = null;
+      } 
+      highlightAirport(r.code);
     }
   }
 });
@@ -635,29 +667,29 @@ function displaySecondLegResults(results) {
 
     const latOffset = 0.025;
     const lonOffset = latOffset / Math.cos(ap.lat * Math.PI / 180);
-
-    const squareMarker = L.rectangle([
-      [ap.lat + latOffset, ap.lon - lonOffset],
-      [ap.lat - latOffset, ap.lon + lonOffset]
-    ], {
-      color: color,
-      weight: 1,
-      fillColor: color,
-      fillOpacity: 0.9
+    
+    const marker = L.marker([ap.lat, ap.lon], {
+      icon: squareMarker(color) // or triangleIcon(color)
     }).addTo(map)
       .bindPopup(`
         <strong>${r.code}</strong> (Class ${ap.airspace})<br>
         ${ap.airport_name}<br>
+        1st Leg: ${haversine(
+            airportData[r.homeCode].lat,
+            airportData[r.homeCode].lon,
+            airportData[r.fromCode].lat,
+            airportData[r.fromCode].lon
+        ).toFixed(1)} NM<br>
         2nd Leg: ${r.leg2Distance} NM<br>
         Return : ${r.leg3Distance} NM<br>
         Total  : ${r.totalDistance} NM<br><br>
         <u>Runways</u><br>
         ${ap.runways.map(rwy => `
-          ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
+         <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
         `).join("<br>")}
       `);
 
-    squareMarker.on("click", () => {
+    marker.on("click", () => {
       const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
@@ -725,12 +757,12 @@ function drawTriangle(firstCode, secondCode, homeCode) {
   const remainingMin = Math.max(totalMin - leg1Distance, 0);
   const remainingMax = Math.max(totalMax - leg1Distance, 0);
 
-console.log("Calling drawSecondLegRing with:", {
-  firstCode, homeCode,
-  leg1Distance,
-  remainingMin,
-  remainingMax
-});
+//console.log("Calling drawSecondLegRing with:", {
+//  firstCode, homeCode,
+//  leg1Distance,
+//  remainingMin,
+//  remainingMax
+//});
 
   drawSecondLegRing(firstAp, remainingMin, remainingMax);
 
@@ -932,6 +964,45 @@ function formatSurface(code) {
   }
 }
 
+function resetTripState() {
+  // 🧹 Remove first-leg line
+  if (legLine) {
+    map.removeLayer(legLine);
+    legLine = null;
+  }
+
+  // 🧹 Remove triangle lines
+  triangleLines.forEach(line => map.removeLayer(line));
+  triangleLines = [];
+
+  // 🧹 Remove second-leg markers
+  if (secondLegMarkers && secondLegMarkers.length) {
+    secondLegMarkers.forEach(m => map.removeLayer(m));
+    secondLegMarkers = [];
+  }
+
+  // 🧹 Remove destination markers
+  if (destinationMarkers && destinationMarkers.length) {
+    destinationMarkers.forEach(m => map.removeLayer(m));
+    destinationMarkers = [];
+  }
+
+  // 🧹 Remove second-leg ring or ellipse
+  if (secondLegRing) {
+    map.removeLayer(secondLegRing);
+    secondLegRing = null;
+  }
+
+  // 🧹 Clear result areas
+  document.getElementById("resultArea").innerHTML = `<p>No destinations yet. Click "Find Destinations" to search.</p>`;
+  document.getElementById("secondLegArea").innerHTML = "";
+
+  // 🧹 Hide second-leg button
+  document.getElementById("secondLegBtn").style.display = "none";
+}
+
+
+
 function showCredits() {
   alert(`🛫 Time Building Planner
 
@@ -956,8 +1027,11 @@ window.onload = () => {
 
 };
 
-  window.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("firstLegMin").addEventListener("input", updateTotalLegMinFromFirstLeg);
-    document.getElementById("firstLegMinInput").addEventListener("change", updateTotalLegMinFromFirstLeg);
-  });
+window.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("firstLegMin").addEventListener("input", updateTotalLegMinFromFirstLeg);
+  document.getElementById("firstLegMinInput").addEventListener("change", updateTotalLegMinFromFirstLeg);
+});
+document.querySelectorAll('input[name="tripType"]').forEach(radio => {
+  radio.addEventListener("change", resetTripState);
+});
 
