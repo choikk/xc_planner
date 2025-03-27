@@ -488,61 +488,150 @@ function displayResults(results) {
       ${ap.runways.map(rwy => `
         <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
       `).join("<br>")}
+      <button onclick="showTwoLegSummary()">📋 Summary Report</button>
     `);
 
     marker.airportCode = r.code;
 
-  marker.on("click", () => {
-    const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
+marker.on("click", () => {
+  const selectedSecond = document.querySelector('input[name="secondLeg"]:checked')?.value;
+  const selectedFirst = document.querySelector('input[name="firstLeg"]:checked')?.value;
+  const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+
+  const isFirst = destinationMarkers.includes(marker);
+  const isSecond = secondLegMarkers.includes(marker);
+
+  // 🚦 Shared marker logic only applies in triangle mode
+  if (tripType === "two" && isFirst && isSecond) {
+    if (selectedSecond === r.code) {
+      // 🔁 Promote to first destination
+      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        highlightAirport(r.code);
+        findSecondLeg();
+      }
+    } else {
+      // ➕ Use as second destination
+      const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
+      }
+    }
+    return;
+  }
+
+  // 🛬 Normal destination selection
+  if (tripType === "one") {
+    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
     if (radio) {
       radio.checked = true;
       radio.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-
-    // 🧹 Clear triangle/second-leg stuff if in triangle mode
-    if (tripType === "two") {
-      // Clear second-leg results
-      document.getElementById("secondLegArea").innerHTML = "";
-
-      // Clear markers
-      if (secondLegMarkers) {
-        secondLegMarkers.forEach(m => map.removeLayer(m));
-        secondLegMarkers = [];
-      }
-
-      // Clear triangle lines
-      triangleLines.forEach(line => map.removeLayer(line));
-      triangleLines = [];
-
-      // Clear second leg ring
-      if (secondLegRing) {
-        map.removeLayer(secondLegRing);
-        secondLegRing = null;
-      }
-
-      // 🔁 Draw new first-leg line
-      if (legLine) {
-        map.removeLayer(legLine);
-        firstLegLine = null;
-      }
-
-      const homeCode = document.getElementById("airportSelect").value;
-      const homeAp = airportData[homeCode];
-      const firstAp = airportData[r.code];
-
-      // 🟢 Auto-trigger second-leg search
-      findSecondLeg();
-    }else{
-      // 🔁 Draw new first-leg line
-      if (legLine) {
-        map.removeLayer(legLine);
-        firstLegLine = null;
-      } 
       highlightAirport(r.code);
+    }
+  } else if (tripType === "two") {
+    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+    if (radio) {
+      radio.checked = true;
+      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+      highlightAirport(r.code);
+      findSecondLeg();
     }
   }
 });
+
+//marker.on("click", () => {
+//  const isFirst = destinationMarkers.includes(marker);
+//  const isSecond = secondLegMarkers.includes(marker);
+//
+//  // 🚦 If it's only in second-leg list → treat as second-leg
+//  if (!isFirst && isSecond) {
+//    const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
+//    if (radio) {
+//      radio.checked = true;
+//      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//      drawTriangle(r.fromCode, r.code, r.homeCode);
+//    }
+//    return;
+//  }
+//
+//  // 🚦 If it's only in first-leg list → treat as first-leg
+//  if (isFirst && !isSecond) {
+////    const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
+//    if (radio) {
+//      radio.checked = true;
+//      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//      highlightAirport(r.code);
+//      
+//      const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+//      if (tripType === "two") findSecondLeg();
+//    }
+//    return;
+//  }
+//
+//  // 🚦 Shared airport → show popup with both options
+//  marker.bindPopup(`
+//    <strong>${r.code}</strong><br>
+//    Appears in both routes. Use as:<br>
+//    <button onclick="selectAsFirst('${r.code}')">🟣 First Destination</button><br>
+//    <button onclick="selectAsSecond('${r.code}')">🟥 Second Destination</button>
+//  `).openPopup();
+//});
+
+//  marker.on("click", () => {
+//    const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
+//    if (radio) {
+//      radio.checked = true;
+//      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//
+//    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+//
+//    // 🧹 Clear triangle/second-leg stuff if in triangle mode
+//    if (tripType === "two") {
+//      // Clear second-leg results
+//      document.getElementById("secondLegArea").innerHTML = "";
+//
+//      // Clear markers
+//      if (secondLegMarkers) {
+//        secondLegMarkers.forEach(m => map.removeLayer(m));
+//        secondLegMarkers = [];
+//      }
+//
+//      // Clear triangle lines
+//      triangleLines.forEach(line => map.removeLayer(line));
+//      triangleLines = [];
+//
+//      // Clear second leg ring
+//      if (secondLegRing) {
+//        map.removeLayer(secondLegRing);
+//        secondLegRing = null;
+//      }
+//
+//      // 🔁 Draw new first-leg line
+//      if (legLine) {
+//        map.removeLayer(legLine);
+//        firstLegLine = null;
+//      }
+//
+//      const homeCode = document.getElementById("airportSelect").value;
+//      const homeAp = airportData[homeCode];
+//      const firstAp = airportData[r.code];
+//
+//      // 🟢 Auto-trigger second-leg search
+//      findSecondLeg();
+//    }else{
+//      // 🔁 Draw new first-leg line
+//      if (legLine) {
+//        map.removeLayer(legLine);
+//        firstLegLine = null;
+//      } 
+//      highlightAirport(r.code);
+//    }
+//  }
+//});
 
     destinationMarkers.push(marker);
   });
@@ -694,16 +783,81 @@ function displaySecondLegResults(results) {
         ${ap.runways.map(rwy => `
          <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
         `).join("<br>")}
+        <button onclick="showTripSummary()">📋 Summary Report</button>
       `);
 
-    marker.on("click", () => {
-      const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
+marker.on("click", () => {
+  const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+  const selectedFirst = document.querySelector('input[name="firstLeg"]:checked')?.value;
+  const selectedSecond = document.querySelector('input[name="secondLeg"]:checked')?.value;
+
+  const isFirst = destinationMarkers.includes(marker);
+  const isSecond = secondLegMarkers.includes(marker);
+
+  if (tripType === "two" && isFirst && isSecond) {
+    // 🌀 Shared airport toggle logic
+    if (selectedSecond === r.code) {
+      // 🔁 Promote to first destination
+      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
         radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        drawTriangle(r.fromCode, r.code, r.homeCode);
+        highlightAirport(r.code);
+        findSecondLeg(); // Refresh second-leg list
       }
-    });
+    } else {
+      // 🎯 Set as second-leg
+      const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
+      }
+    }
+    return;
+  }
+
+  // ✅ Regular first-leg or second-leg behavior
+  if (tripType === "two" && isFirst) {
+    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+    if (radio) {
+      radio.checked = true;
+      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+      highlightAirport(r.code);
+      findSecondLeg();
+    }
+    return;
+  }
+
+  if (tripType === "two" && isSecond) {
+    const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
+    if (radio) {
+      radio.checked = true;
+      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+      drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
+    }
+    return;
+  }
+
+  // One destination mode
+  if (tripType === "one") {
+    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+    if (radio) {
+      radio.checked = true;
+      radio.scrollIntoView({ behavior: "smooth", block: "center" });
+      highlightAirport(r.code);
+    }
+  }
+});
+
+//    marker.on("click", () => {
+//      const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
+//      if (radio) {
+//        radio.checked = true;
+//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//        drawTriangle(r.fromCode, r.code, r.homeCode);
+//      }
+//    });
 
     secondLegMarkers.push(marker);
   });
@@ -1021,6 +1175,158 @@ console.log("Removing second-leg markers:", secondLegMarkers);
   }
 }
 
+function showSharedPopup(marker, code) {
+  const popupContent = `
+    <strong>${code}</strong><br>
+    Appears in both lists. Use as:<br>
+    <button onclick="selectAsFirst('${code}')">🟣 First Destination</button><br>
+    <button onclick="selectAsSecond('${code}')">🟥 Second Destination</button>
+  `;
+
+  marker.bindPopup(popupContent).openPopup();
+}
+
+function selectAsFirst(code) {
+  const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${code}"]`);
+  if (radio) {
+    radio.checked = true;
+    radio.scrollIntoView({ behavior: "smooth", block: "center" });
+    highlightAirport(code);
+
+    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+    if (tripType === "two") findSecondLeg();
+  }
+
+  map.closePopup(); // Clean up
+}
+
+function selectAsSecond(code) {
+  const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${code}"]`);
+  if (radio) {
+    radio.checked = true;
+    radio.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const firstCode = document.querySelector(`input[name="firstLeg"]:checked`)?.value;
+    const homeCode = document.getElementById("airportSelect").value;
+    drawTriangle(firstCode, code, homeCode);
+  }
+
+  map.closePopup(); // Clean up
+}
+
+
+function showTripSummary() {
+  const homeCode = document.getElementById("airportSelect").value;
+  const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
+  const secondCode = document.querySelector('input[name="secondLeg"]:checked')?.value;
+
+  if (!homeCode || !firstCode || !secondCode) {
+    alert("Please select all three airports to generate a summary.");
+    return;
+  }
+
+  const home = airportData[homeCode];
+  const first = airportData[firstCode];
+  const second = airportData[secondCode];
+
+  const getRunways = (ap) => {
+    return ap.runways.map(r =>
+      `    • ${r.rwy_id}: ${r.length}' x ${r.width}' ${formatSurface(r.surface)} (${r.condition})`
+    ).join("\n");
+  };
+
+  const leg1 = haversine(home.lat, home.lon, first.lat, first.lon).toFixed(1);
+  const leg2 = haversine(first.lat, first.lon, second.lat, second.lon).toFixed(1);
+  const leg3 = haversine(second.lat, second.lon, home.lat, home.lon).toFixed(1);
+  const total = (parseFloat(leg1) + parseFloat(leg2) + parseFloat(leg3)).toFixed(1);
+
+  const summary = `
+🛫 Airports
+
+Departure:
+  Airport ID: ${homeCode}
+  Airspace  : Class ${home.airspace}
+  Name      : ${home.airport_name}
+  Runways   :
+${getRunways(home)}
+
+1st Destination:
+  Airport ID   : ${firstCode}
+  Airspace     : Class ${first.airspace}
+  Name         : ${first.airport_name}
+  Runways      :
+${getRunways(first)}
+
+2nd Destination:
+  Airport ID   : ${secondCode}
+  Airspace     : Class ${second.airspace}
+  Name         : ${second.airport_name}
+  Runways      :
+${getRunways(second)}
+
+📏 Trip Summary
+
+  ${homeCode} ➝ ${firstCode} : ${leg1} NM
+  ${firstCode} ➝ ${secondCode} : ${leg2} NM
+  ${secondCode} ➝ ${homeCode} : ${leg3} NM
+
+  Total Distance: ${total} NM
+  `.trim();
+
+  document.getElementById("summaryContent").textContent = summary;
+  document.getElementById("summaryModal").style.display = "block";
+}
+
+function showTwoLegSummary() {
+  const homeCode = document.getElementById("airportSelect").value;
+  const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
+
+  if (!homeCode || !firstCode) {
+    alert("Please select a departure and destination.");
+    return;
+  }
+
+  const home = airportData[homeCode];
+  const dest = airportData[firstCode];
+
+  const getRunways = (ap) => {
+    return ap.runways.map(r =>
+      `    • ${r.rwy_id}: ${r.length}' x ${r.width}' ${formatSurface(r.surface)} (${r.condition})`
+    ).join("\n");
+  };
+
+  const legOut = haversine(home.lat, home.lon, dest.lat, dest.lon).toFixed(1);
+  const legBack = legOut; // symmetrical round trip
+  const total = (parseFloat(legOut) * 2).toFixed(1);
+
+  const summary = `
+🛫 Airports
+
+Departure:
+  Airport ID: ${homeCode}
+  Airspace  : Class ${home.airspace}
+  Name      : ${home.airport_name}
+  Runways   :
+${getRunways(home)}
+
+Destination :
+  Airport ID: ${firstCode}
+  Airspace  : Class ${dest.airspace}
+  Name: ${dest.airport_name}
+  Runways   :
+${getRunways(dest)}
+
+📏 Trip Summary
+
+  ${homeCode} ➝ ${firstCode} : ${legOut} NM
+  ${firstCode} ➝ ${homeCode} : ${legBack} NM
+
+  Total Distance: ${total} NM
+`.trim();
+
+  document.getElementById("summaryContent").textContent = summary;
+  document.getElementById("summaryModal").style.display = "block";
+}
 
 
 function showCredits() {
