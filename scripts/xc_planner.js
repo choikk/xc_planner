@@ -1,4 +1,4 @@
-const APP_VERSION = "v1.1.5"; // or whatever you like
+const APP_VERSION = "v1.2.0"; // or whatever you like
 const FILE_DATE = new Date().toISOString().split("T")[0];
 
 let airportData = {};
@@ -15,6 +15,10 @@ let legLine;
 
 let legendAdded = false;
 let secondLegRing;
+
+let secondLegEllipseInner = null;
+let secondLegEllipseOuter = null;
+
 
 const squareMarker = (color) => L.divIcon({
   className: "custom-square",
@@ -134,6 +138,9 @@ function initMap() {
     maxZoom: 18,
     attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
+  // 🟦 Custom pane for ellipses behind everything
+  map.createPane("ellipsePane");
+  map.getPane("ellipsePane").style.zIndex = 299; // lower than default markers
 }
 
 function updateMap(lat, lon, label) {
@@ -453,7 +460,8 @@ function displayResults(results) {
     html += `
       <li>
         <label>
-          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""} onchange="highlightAirport('${r.code}')">
+          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""} onchange="highlightAirport('${r.code}'); drawSecondLegEllipses()">
+
           <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft
         </label>
       </li>
@@ -494,144 +502,29 @@ function displayResults(results) {
     marker.airportCode = r.code;
 
 marker.on("click", () => {
-  const selectedSecond = document.querySelector('input[name="secondLeg"]:checked')?.value;
-  const selectedFirst = document.querySelector('input[name="firstLeg"]:checked')?.value;
-  const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
 
-  const isFirst = destinationMarkers.includes(marker);
-  const isSecond = secondLegMarkers.includes(marker);
+    if (tripType === "two") {
+    // 🧹 Reset everything
+      resetTripState();
 
-  // 🚦 Shared marker logic only applies in triangle mode
-  if (tripType === "two" && isFirst && isSecond) {
-    if (selectedSecond === r.code) {
-      // 🔁 Promote to first destination
-      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+    // 🧠 Set a flag for reselecting this airport after re-search
+      window.reselectFirstLegCode = r.code;
+
+    // 🔁 Rerun search — this will call displayResults again
+      findDestinations();
+
+    } else {
+    // ✅ One-destination mode
+      const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
         radio.scrollIntoView({ behavior: "smooth", block: "center" });
         highlightAirport(r.code);
-        findSecondLeg();
-      }
-    } else {
-      // ➕ Use as second destination
-      const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
-      if (radio) {
-        radio.checked = true;
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
       }
     }
-    return;
-  }
+  });
 
-  // 🛬 Normal destination selection
-  if (tripType === "one") {
-    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-    if (radio) {
-      radio.checked = true;
-      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-      highlightAirport(r.code);
-    }
-  } else if (tripType === "two") {
-    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-    if (radio) {
-      radio.checked = true;
-      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-      highlightAirport(r.code);
-      findSecondLeg();
-    }
-  }
-});
-
-//marker.on("click", () => {
-//  const isFirst = destinationMarkers.includes(marker);
-//  const isSecond = secondLegMarkers.includes(marker);
-//
-//  // 🚦 If it's only in second-leg list → treat as second-leg
-//  if (!isFirst && isSecond) {
-//    const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
-//    if (radio) {
-//      radio.checked = true;
-//      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-//      drawTriangle(r.fromCode, r.code, r.homeCode);
-//    }
-//    return;
-//  }
-//
-//  // 🚦 If it's only in first-leg list → treat as first-leg
-//  if (isFirst && !isSecond) {
-////    const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
-//    if (radio) {
-//      radio.checked = true;
-//      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-//      highlightAirport(r.code);
-//      
-//      const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-//      if (tripType === "two") findSecondLeg();
-//    }
-//    return;
-//  }
-//
-//  // 🚦 Shared airport → show popup with both options
-//  marker.bindPopup(`
-//    <strong>${r.code}</strong><br>
-//    Appears in both routes. Use as:<br>
-//    <button onclick="selectAsFirst('${r.code}')">🟣 First Destination</button><br>
-//    <button onclick="selectAsSecond('${r.code}')">🟥 Second Destination</button>
-//  `).openPopup();
-//});
-
-//  marker.on("click", () => {
-//    const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
-//    if (radio) {
-//      radio.checked = true;
-//      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-//
-//    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-//
-//    // 🧹 Clear triangle/second-leg stuff if in triangle mode
-//    if (tripType === "two") {
-//      // Clear second-leg results
-//      document.getElementById("secondLegArea").innerHTML = "";
-//
-//      // Clear markers
-//      if (secondLegMarkers) {
-//        secondLegMarkers.forEach(m => map.removeLayer(m));
-//        secondLegMarkers = [];
-//      }
-//
-//      // Clear triangle lines
-//      triangleLines.forEach(line => map.removeLayer(line));
-//      triangleLines = [];
-//
-//      // Clear second leg ring
-//      if (secondLegRing) {
-//        map.removeLayer(secondLegRing);
-//        secondLegRing = null;
-//      }
-//
-//      // 🔁 Draw new first-leg line
-//      if (legLine) {
-//        map.removeLayer(legLine);
-//        firstLegLine = null;
-//      }
-//
-//      const homeCode = document.getElementById("airportSelect").value;
-//      const homeAp = airportData[homeCode];
-//      const firstAp = airportData[r.code];
-//
-//      // 🟢 Auto-trigger second-leg search
-//      findSecondLeg();
-//    }else{
-//      // 🔁 Draw new first-leg line
-//      if (legLine) {
-//        map.removeLayer(legLine);
-//        firstLegLine = null;
-//      } 
-//      highlightAirport(r.code);
-//    }
-//  }
-//});
 
     destinationMarkers.push(marker);
   });
@@ -644,14 +537,36 @@ marker.on("click", () => {
     const radios = document.querySelectorAll('input[name="firstLeg"]');
     radios.forEach(radio => {
       radio.addEventListener("change", () => {
+     //  resetSecondLeg(); // ✅ Clear triangles, markers, etc.
+        resetTripState()
+        drawSecondLegEllipses();
+        findDestinations();
+        findSecondLeg();
       });
     });
 
     if (radios.length > 0) {
       radios[0].checked = true;
       secondBtn.style.display = "inline-block";
+      drawSecondLegEllipses();
+      findSecondLeg();
     }
   }
+
+// 🟢 Auto-select previously requested first-leg if needed
+if (window.reselectFirstLegCode) {
+  const code = window.reselectFirstLegCode;
+  const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${code}"]`);
+  if (radio) {
+    radio.checked = true;
+    radio.scrollIntoView({ behavior: "smooth", block: "center" });
+    highlightAirport(code);
+    findSecondLeg();
+    drawSecondLegEllipses();
+  }
+  window.reselectFirstLegCode = null; // ✅ Clear after use
+}
+
 
   window.matchedDestinations = results;
 }
@@ -1194,7 +1109,10 @@ function selectAsFirst(code) {
     highlightAirport(code);
 
     const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-    if (tripType === "two") findSecondLeg();
+    if (tripType === "two") {
+      drawSecondLegEllipses(); // ➕ Add this to keep ellipse updated
+      findSecondLeg();
+    }
   }
 
   map.closePopup(); // Clean up
@@ -1328,6 +1246,326 @@ ${getRunways(dest)}
   document.getElementById("summaryModal").style.display = "block";
 }
 
+function computeEllipsePoints1(focus1, focus2, semiMajorNm, numPoints = 180) {
+  const toRad = deg => deg * Math.PI / 180;
+  const toDeg = rad => rad * 180 / Math.PI;
+  const R = 3440.065; // Earth radius in NM
+
+  const lat1 = toRad(focus1[0]);
+  const lon1 = toRad(focus1[1]);
+  const lat2 = toRad(focus2[0]);
+  const lon2 = toRad(focus2[1]);
+
+  // Convert both to 3D Cartesian
+  const x1 = R * Math.cos(lat1) * Math.cos(lon1);
+  const y1 = R * Math.cos(lat1) * Math.sin(lon1);
+  const z1 = R * Math.sin(lat1);
+
+  const x2 = R * Math.cos(lat2) * Math.cos(lon2);
+  const y2 = R * Math.cos(lat2) * Math.sin(lon2);
+  const z2 = R * Math.sin(lat2);
+
+  // Ellipse center (midpoint of foci in 3D)
+  const cx = (x1 + x2) / 2;
+  const cy = (y1 + y2) / 2;
+  const cz = (z1 + z2) / 2;
+
+  const centerLat = toDeg(Math.asin(cz / R));
+  const centerLon = toDeg(Math.atan2(cy, cx));
+  const center = [centerLat, centerLon];
+
+  // Distance between foci (c) and semi-minor axis (b)
+  const distanceBetweenFoci = haversine(focus1[0], focus1[1], focus2[0], focus2[1]);
+  const semiMinor = Math.sqrt(Math.max(0, semiMajorNm ** 2 - (distanceBetweenFoci / 2) ** 2));
+
+console.log("c:", distanceBetweenFoci, "semiMajor:", semiMajorNm, "semiMinor:", semiMinor);
+
+  // Fix: use correct rotation angle between foci
+  const bearing = computeBearing(focus1[0], focus1[1], focus2[0], focus2[1]);
+  const bearingRad = toRad(bearing);
+
+  const points = [];
+
+  for (let i = 0; i <= numPoints; i++) {
+    const theta = (2 * Math.PI * i) / numPoints;
+
+    const dx = semiMajorNm * Math.cos(theta);
+    const dy = semiMinor * Math.sin(theta);
+
+    // Rotate point by bearing
+    const xRot = dx * Math.cos(bearingRad) - dy * Math.sin(bearingRad);
+    const yRot = dx * Math.sin(bearingRad) + dy * Math.cos(bearingRad);
+
+    const distance = Math.sqrt(xRot ** 2 + yRot ** 2);
+    const angle = toDeg(Math.atan2(xRot, yRot));
+
+    points.push(destinationPoint(center[0], center[1], (angle + 360) % 360, distance));
+  }
+
+  return points;
+}
+
+function computeEllipsePoints(focusA, focusB, semiMajorNm, numPoints = 180) {
+  const toRad = deg => deg * Math.PI / 180;
+  const toDeg = rad => rad * 180 / Math.PI;
+  const earthRadiusNm = 3440.065;
+
+  const [latA, lonA] = focusA;
+  const [latB, lonB] = focusB;
+
+  // Midpoint (approximate ellipse center)
+  const centerLat = (latA + latB) / 2;
+  const centerLon = (lonA + lonB) / 2;
+
+  // Distance between the two foci
+  const distanceBetweenFoci = haversine(latA, lonA, latB, lonB);
+
+  // Ensure the ellipse is valid
+  if (semiMajorNm < distanceBetweenFoci / 2) return [];
+
+  const semiMinorNm = Math.sqrt(semiMajorNm ** 2 - (distanceBetweenFoci / 2) ** 2);
+
+  // Ellipse rotation (bearing from A to B)
+  const bearingDeg = computeBearing(latA, lonA, latB, lonB);
+  const bearingRad = toRad(bearingDeg);
+
+  const points = [];
+
+  for (let i = 0; i <= numPoints; i++) {
+    const theta = (2 * Math.PI * i) / numPoints;
+
+    const dx = semiMajorNm * Math.cos(theta);
+    const dy = semiMinorNm * Math.sin(theta);
+
+    // Rotate by ellipse orientation
+    const xRot = dx * Math.cos(bearingRad) - dy * Math.sin(bearingRad);
+    const yRot = dx * Math.sin(bearingRad) + dy * Math.cos(bearingRad);
+
+    const pointDistance = Math.sqrt(xRot ** 2 + yRot ** 2);
+    const pointBearing = (toDeg(Math.atan2(xRot, yRot)) + 360) % 360;
+
+    const [lat, lon] = destinationPoint(centerLat, centerLon, pointBearing, pointDistance);
+    points.push([lat, lon]);
+  }
+
+  return points;
+}
+
+
+function computeEllipsePoints3(focusA, focusB, semiMajorNm, numPoints = 180) {
+  const toRad = deg => deg * Math.PI / 180;
+  const toDeg = rad => rad * 180 / Math.PI;
+  const R = 3440.065; // Earth radius in NM
+
+  const [latA, lonA] = focusA;
+  const [latB, lonB] = focusB;
+
+  // Midpoint = ellipse center
+  const centerLat = (latA + latB) / 2;
+  const centerLon = (lonA + lonB) / 2;
+
+  // Distance between foci (c)
+  const c = haversine(latA, lonA, latB, lonB);
+
+  // Validate that total distance is large enough
+  if (semiMajorNm < c / 2) return []; // invalid ellipse
+
+  const semiMinor = Math.sqrt(semiMajorNm ** 2 - (c / 2) ** 2);
+
+  // Bearing from focusA to focusB
+
+  const bearing = computeBearing(focusA[0], focusA[1], focusB[0], focusB[1]);
+  const bearingRad = (Math.PI / 180) * bearing;
+
+  const dx = semiMajorNm * Math.cos(theta);
+  const dy = semiMinorNm * Math.sin(theta);
+
+// Rotate ellipse coordinates by bearing angle
+  const xRot = dx * Math.cos(bearingRad) - dy * Math.sin(bearingRad);
+  const yRot = dx * Math.sin(bearingRad) + dy * Math.cos(bearingRad);
+
+  const angleDeg = (Math.atan2(xRot, yRot) * 180) / Math.PI;
+  const distance = Math.sqrt(xRot ** 2 + yRot ** 2);
+
+  const [lat, lon] = destinationPoint(centerLat, centerLon, (angleDeg + 360) % 360, distance);
+  points.push([lat, lon]);
+
+
+  return points;
+}
+
+function computeBearing(startLatDeg, startLonDeg, endLatDeg, endLonDeg) {
+  const toRadians = deg => deg * Math.PI / 180;
+  const toDegrees = rad => rad * 180 / Math.PI;
+
+  const lat1 = toRadians(startLatDeg);
+  const lon1 = toRadians(startLonDeg);
+  const lat2 = toRadians(endLatDeg);
+  const lon2 = toRadians(endLonDeg);
+
+  const deltaLon = lon2 - lon1;
+
+  const y = Math.sin(deltaLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+
+  const thetaRad = Math.atan2(x, y);
+  const bearingDeg = (toDegrees(thetaRad) + 360) % 360;
+
+  return bearingDeg;
+}
+
+function destinationPoint(startLatDeg, startLonDeg, bearingDeg, distanceNm) {
+  const earthRadiusNm = 3440.065; // Earth's radius in nautical miles
+  const toRadians = deg => deg * Math.PI / 180;
+  const toDegrees = rad => rad * 180 / Math.PI;
+
+  const angularDistance = distanceNm / earthRadiusNm;
+  const bearingRad = toRadians(bearingDeg);
+  const startLatRad = toRadians(startLatDeg);
+  const startLonRad = toRadians(startLonDeg);
+
+  const destLatRad = Math.asin(
+    Math.sin(startLatRad) * Math.cos(angularDistance) +
+    Math.cos(startLatRad) * Math.sin(angularDistance) * Math.cos(bearingRad)
+  );
+
+  const destLonRad = startLonRad + Math.atan2(
+    Math.sin(bearingRad) * Math.sin(angularDistance) * Math.cos(startLatRad),
+    Math.cos(angularDistance) - Math.sin(startLatRad) * Math.sin(destLatRad)
+  );
+
+  const destLatDeg = toDegrees(destLatRad);
+  const destLonDeg = ((toDegrees(destLonRad) + 540) % 360) - 180; // normalize to [-180, 180]
+
+  return [destLatDeg, destLonDeg];
+}
+
+function drawSecondLegEllipses() {
+
+  const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+  if (tripType !== "two") return;
+
+  const homeCode = document.getElementById("airportSelect").value;
+  const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
+
+  if (!homeCode || !firstCode) return;
+
+  const home = airportData[homeCode];
+  const first = airportData[firstCode];
+
+  const actualFirstLeg = haversine(home.lat, home.lon, first.lat, first.lon);
+
+  const totalMin = parseFloat(document.getElementById("totalLegMin").value);
+  const totalMax = parseFloat(document.getElementById("totalLegMax").value);
+
+  // 🧹 Remove old ellipses
+  if (secondLegEllipseInner) {
+    map.removeLayer(secondLegEllipseInner);
+    secondLegEllipseInner = null;
+  }
+  if (secondLegEllipseOuter) {
+    map.removeLayer(secondLegEllipseOuter);
+    secondLegEllipseOuter = null;
+  }
+
+  // 🟠 Outer ellipse
+  const outerPoints = computeEllipsePoints(
+    [home.lat, home.lon],
+    [first.lat, first.lon],
+    (totalMax - actualFirstLeg)/ 2
+  );
+  secondLegEllipseOuter = L.polygon(outerPoints, {
+    color: "#FFA500",
+    weight: 2,
+    dashArray: "5, 5",
+    interactive: false,
+    fillOpacity: 0.05,
+    pane: "ellipsePane"
+  }).addTo(map);
+
+  // 🟢 Inner ellipse
+  const innerPoints = computeEllipsePoints(
+    [home.lat, home.lon],
+    [first.lat, first.lon],
+    (totalMin - actualFirstLeg) / 2
+  );
+  secondLegEllipseInner = L.polygon(innerPoints, {
+    color: "#32CD32",
+    weight: 2,
+    dashArray: "2, 6",
+    interactive: false,
+    fillOpacity: 0.05,
+    pane: "ellipsePane"
+  }).addTo(map);
+}
+
+function resetSecondLeg() {
+  document.getElementById("secondLegArea").innerHTML = "";
+
+  if (window.secondLegMarkers) {
+    secondLegMarkers.forEach(m => map.removeLayer(m));
+    secondLegMarkers = [];
+  }
+
+  if (triangleLines) {
+    triangleLines.forEach(line => map.removeLayer(line));
+    triangleLines = [];
+  }
+
+  if (secondLegEllipseInner) {
+    map.removeLayer(secondLegEllipseInner);
+    secondLegEllipseInner = null;
+  }
+
+  if (secondLegEllipseOuter) {
+    map.removeLayer(secondLegEllipseOuter);
+    secondLegEllipseOuter = null;
+  }
+
+  if (legLine) {
+    map.removeLayer(legLine);
+    legLine = null;
+  }
+}
+
+function resetTripState() {
+  document.getElementById("resultArea").innerHTML = "";
+  document.getElementById("secondLegArea").innerHTML = "";
+
+  if (window.destinationMarkers) {
+    destinationMarkers.forEach(m => map.removeLayer(m));
+    destinationMarkers = [];
+  }
+
+  if (window.secondLegMarkers) {
+    secondLegMarkers.forEach(m => map.removeLayer(m));
+    secondLegMarkers = [];
+  }
+
+  if (triangleLines) {
+    triangleLines.forEach(line => map.removeLayer(line));
+    triangleLines = [];
+  }
+
+  if (legLine) {
+    map.removeLayer(legLine);
+    legLine = null;
+  }
+
+  if (secondLegEllipseInner) {
+    map.removeLayer(secondLegEllipseInner);
+    secondLegEllipseInner = null;
+  }
+
+  if (secondLegEllipseOuter) {
+    map.removeLayer(secondLegEllipseOuter);
+    secondLegEllipseOuter = null;
+  }
+}
+
+
 
 function showCredits() {
   alert(`🛫 Time Building Planner
@@ -1359,5 +1597,11 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 document.querySelectorAll('input[name="tripType"]').forEach(radio => {
   radio.addEventListener("change", resetTripState);
+});
+
+["totalLegMin", "totalLegMax", "totalLegMinInput", "totalLegMaxInput"].forEach(id => {
+  document.getElementById(id)?.addEventListener("input", () => {
+    drawSecondLegEllipses();
+  });
 });
 
