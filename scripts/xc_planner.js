@@ -1,4 +1,4 @@
-const APP_VERSION = "v1.1.0"; // or whatever you like
+const APP_VERSION = "v1.1.5"; // or whatever you like
 const FILE_DATE = new Date().toISOString().split("T")[0];
 
 let airportData = {};
