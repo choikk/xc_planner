@@ -511,9 +511,11 @@ function displayResults(results) {
       if (radio) {
         radio.checked = true;
         highlightAirport(r.code);
-        drawSecondLegEllipses();
-        findSecondLeg();
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (tripType === "two") {
+          drawSecondLegEllipses();
+          findSecondLeg();
+        }
+//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
         marker.openPopup(); // Ensure popup opens on click
       }
     });
@@ -521,15 +523,23 @@ function displayResults(results) {
 
   // Add change listener for radio buttons
   const radios = document.querySelectorAll('input[name="firstLeg"]');
-  radios.forEach(radio => {
-    radio.addEventListener("change", () => {
-      const code = radio.value;
-      highlightAirport(code);      // Update map for first leg
-      drawSecondLegEllipses();     // Draw ellipses for second leg
-      findSecondLeg();             // Find second-leg options
+  if (tripType === "two") {
+    radios.forEach(radio => {
+      radio.addEventListener("change", () => {
+        const code = radio.value;
+        highlightAirport(code);      // Update map for first leg
+        drawSecondLegEllipses();     // Draw ellipses for second leg
+        findSecondLeg();             // Find second-leg options
+      });
     });
-  });
-
+  } else {
+    radios.forEach(radio => {
+      radio.addEventListener("change", () => {
+        const code = radio.value;  
+        highlightAirport(code);      // Update map for first leg
+      });
+    });
+  }
   // Initial setup for two-destination mode
   if (tripType === "two" && radios.length > 0) {
     const firstRadio = radios[0];
@@ -707,7 +717,7 @@ function displaySecondLegResults(results) {
         const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
         if (radio) {
           radio.checked = true;
-          radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//          radio.scrollIntoView({ behavior: "smooth", block: "center" });
           highlightAirport(r.code);
           findSecondLeg(); // Refresh second-leg list
         }
@@ -716,7 +726,7 @@ function displaySecondLegResults(results) {
         const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
         if (radio) {
           radio.checked = true;
-          radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//          radio.scrollIntoView({ behavior: "smooth", block: "center" });
           drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
         }
       }
@@ -728,7 +738,7 @@ function displaySecondLegResults(results) {
       const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
         highlightAirport(r.code);
         findSecondLeg();
       }
@@ -739,7 +749,7 @@ function displaySecondLegResults(results) {
       const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//       radio.scrollIntoView({ behavior: "smooth", block: "center" });
         drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
       }
       return;
@@ -750,7 +760,7 @@ function displaySecondLegResults(results) {
       const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
         highlightAirport(r.code);
       }
     }
