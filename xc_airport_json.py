@@ -34,18 +34,23 @@ df_rwy["SURFACE_TYPE_CODE"] = df_rwy["SURFACE_TYPE_CODE"].fillna("").str.strip()
 
 rwy_dict = {}
 for _, row in df_rwy.iterrows():
+    cond = ""
     if "X" in row["RWY_ID"] or "H" in row["RWY_ID"]:
         continue  # Skip runways with X or H in the ID
 
     if not row["RWY_LEN"] or row["RWY_LEN"].strip() == "0":
         continue  # Skip if length is missing or zero
+    if row["COND"] == "":
+        cond = "Unknown Condition"
+    else:
+        cond = row["COND"]
 
     rwy_info = {
         "rwy_id": row["RWY_ID"],
         "length": row["RWY_LEN"],
         "width": row["RWY_WIDTH"],
         "surface": row["SURFACE_TYPE_CODE"],
-        "condition": row["COND"]
+        "condition": cond
     }
     rwy_dict.setdefault(row["SITE_NO"], []).append(rwy_info)
 
