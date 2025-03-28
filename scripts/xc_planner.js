@@ -1,4 +1,4 @@
-const APP_VERSION = "v1.2.0"; // or whatever you like
+const APP_VERSION = "v1.2.2"; // or whatever you like
 const FILE_DATE = new Date().toISOString().split("T")[0];
 
 let airportData = {};
@@ -453,121 +453,110 @@ function displayResults(results) {
 
   results.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
 
-//  let html = `<p>✅ ${results.length} destination(s) found:</p><ul>`;
+  // Build the HTML for the results list
   let html = `<p>✅ ${results.length} destination(s) found:</p><ul class="result-list">`;
-
   results.forEach((r, i) => {
     html += `
       <li>
-        <label>
-          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""} onchange="highlightAirport('${r.code}'); drawSecondLegEllipses()">
-
+        <label style="font-size: 1.0em;">
+          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""}>
           <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft
         </label>
       </li>
     `;
   });
   html += "</ul>";
-
   div.innerHTML = html;
 
-  // 🔁 Clear previous markers
+  // Clear existing markers
   destinationMarkers.forEach(m => map.removeLayer(m));
   destinationMarkers = [];
 
-  // 🛩 Add markers for each matching airport
+  // Add markers with popups
   results.forEach(r => {
     const ap = airportData[r.code];
     const color = getAirspaceColor(ap.airspace);
-
     const marker = L.circleMarker([ap.lat, ap.lon], {
       radius: 6,
       color: color,
       fillColor: color,
       fillOpacity: 0.9,
       weight: 1
-    })
-    .addTo(map)
-    .bindPopup(`
-      <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
-      ${ap.airport_name}<br>
-      Total: ${r.distance*2} NM<br><br>
-      <u>Runways</u><br>
-      ${ap.runways.map(rwy => `
-        <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
-      `).join("<br>")}
-      <button onclick="showTwoLegSummary()">📋 Summary Report</button>
-    `);
+    }).addTo(map);
 
     marker.airportCode = r.code;
-
-marker.on("click", () => {
-    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-
-    if (tripType === "two") {
-    // 🧹 Reset everything
-      resetTripState();
-
-    // 🧠 Set a flag for reselecting this airport after re-search
-      window.reselectFirstLegCode = r.code;
-
-    // 🔁 Rerun search — this will call displayResults again
-      findDestinations();
-
-    } else {
-    // ✅ One-destination mode
-      const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${r.code}"]`);
-      if (radio) {
-        radio.checked = true;
-        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        highlightAirport(r.code);
-      }
-    }
-  });
-
-
     destinationMarkers.push(marker);
-  });
 
-  // Show second-leg button only if trip type is "two"
-  const secondBtn = document.getElementById("secondLegBtn");
-  if (tripType === "two") {
-    secondBtn.style.display = "none";
-
-    const radios = document.querySelectorAll('input[name="firstLeg"]');
-    radios.forEach(radio => {
-      radio.addEventListener("change", () => {
-     //  resetSecondLeg(); // ✅ Clear triangles, markers, etc.
-        resetTripState()
-        drawSecondLegEllipses();
-        findDestinations();
-        findSecondLeg();
-      });
+    // Bind popup to each marker
+    marker.bindPopup(() => {
+      const popupContent = L.DomUtil.create("div");
+      popupContent.innerHTML = `
+        <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
+        ${ap.airport_name}<br>
+        Total: ${(r.distance * 2).toFixed(1)} NM<br><br>
+        <u>Runways</u><br>
+        ${ap.runways.map(rwy => `
+          <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
+        `).join("<br>")}
+        <button class="summary-btn">📋 Summary Report</button>
+      `;
+      const btn = popupContent.querySelector(".summary-btn");
+      btn.addEventListener("click", () => showTwoLegSummary());
+      return popupContent;
     });
 
-    if (radios.length > 0) {
-      radios[0].checked = true;
+    // Add click handler to sync with radio button
+    marker.on("click", () => {
+      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        highlightAirport(r.code);
+        drawSecondLegEllipses();
+        findSecondLeg();
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        marker.openPopup(); // Ensure popup opens on click
+      }
+    });
+  });
+
+  // Add change listener for radio buttons
+  const radios = document.querySelectorAll('input[name="firstLeg"]');
+  radios.forEach(radio => {
+    radio.addEventListener("change", () => {
+      const code = radio.value;
+      highlightAirport(code);      // Update map for first leg
+      drawSecondLegEllipses();     // Draw ellipses for second leg
+      findSecondLeg();             // Find second-leg options
+    });
+  });
+
+  // Initial setup for two-destination mode
+  if (tripType === "two" && radios.length > 0) {
+    const firstRadio = radios[0];
+    firstRadio.checked = true; // Ensure first is selected
+    highlightAirport(firstRadio.value);
+    drawSecondLegEllipses();
+    findSecondLeg();
+  }
+
+// Show second-leg button only if trip type is "two"
+  const secondBtn = document.getElementById("secondLegBtn");
+  if (secondBtn) { // Check if the button exists in the DOM
+    if (tripType === "two") {
       secondBtn.style.display = "inline-block";
-      drawSecondLegEllipses();
-      findSecondLeg();
+      secondBtn.textContent = "Find Second Leg"; // Optional: set button text
+      secondBtn.onclick = () => {
+        resetSecondLeg();  // Reset only second-leg state
+        findSecondLeg();   // Rerun second-leg search
+        drawSecondLegEllipses();
+
+        const firstLegCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
+        highlightAirport(firstLegCode);
+      };
+    } else {
+      secondBtn.style.display = "none";
     }
   }
-
-// 🟢 Auto-select previously requested first-leg if needed
-if (window.reselectFirstLegCode) {
-  const code = window.reselectFirstLegCode;
-  const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${code}"]`);
-  if (radio) {
-    radio.checked = true;
-    radio.scrollIntoView({ behavior: "smooth", block: "center" });
-    highlightAirport(code);
-    findSecondLeg();
-    drawSecondLegEllipses();
-  }
-  window.reselectFirstLegCode = null; // ✅ Clear after use
-}
-
-
   window.matchedDestinations = results;
 }
 
@@ -644,12 +633,12 @@ function displaySecondLegResults(results) {
   results.sort((a, b) => a.totalDistance - b.totalDistance);
 
   let html = `<h3>Second Leg Destinations (Sort by total trip distance)</h3>`;
-  html += `<p>✅ ${results.length} second-leg destination(s) found:</p><ul>`;
+  html += `<p>✅ ${results.length} second-leg destination(s) found:</p><ul class="result-list">`;
   results.forEach((r, i) => {
     html += `
       <li>
-        <label>
-          <input type="radio" name="secondLeg" value="${r.code}" ${i === 0 ? "checked" : ""} onchange="drawTriangle('${r.fromCode}', '${r.code}', '${r.homeCode}')">
+        <label style="font-size: 1.0em;">
+          <input type="radio" name="secondLeg" value="${r.code}" onchange="drawTriangle('${r.fromCode}', '${r.code}', '${r.homeCode}')">
           <strong>${r.code}</strong> (${r.totalDistance} NM) – ${r.name}, ${r.city}, ${r.state}
         </label>
       </li>
@@ -657,14 +646,14 @@ function displaySecondLegResults(results) {
   });
   html += "</ul>";
 
-  html += `<button onclick="finalizeSelection()">Confirm Final Destination</button>`;
+//  html += `<button onclick="finalizeSelection()">Confirm Final Destination</button>`;
   div.innerHTML = html;
 
   // 🔁 Clear previous second-leg markers
   if (secondLegMarkers) {
     secondLegMarkers.forEach(m => map.removeLayer(m));
+    secondLegMarkers = [];
   }
-  secondLegMarkers = [];
 
   const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
   const homeCode = document.getElementById("airportSelect").value;
@@ -701,86 +690,74 @@ function displaySecondLegResults(results) {
         <button onclick="showTripSummary()">📋 Summary Report</button>
       `);
 
-marker.on("click", () => {
-  const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-  const selectedFirst = document.querySelector('input[name="firstLeg"]:checked')?.value;
-  const selectedSecond = document.querySelector('input[name="secondLeg"]:checked')?.value;
+    secondLegMarkers.push(marker);
 
-  const isFirst = destinationMarkers.includes(marker);
-  const isSecond = secondLegMarkers.includes(marker);
+  marker.on("click", () => {
+    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
+    const selectedFirst = document.querySelector('input[name="firstLeg"]:checked')?.value;
+    const selectedSecond = document.querySelector('input[name="secondLeg"]:checked')?.value;
 
-  if (tripType === "two" && isFirst && isSecond) {
+    const isFirst = destinationMarkers.includes(marker);
+    const isSecond = secondLegMarkers.includes(marker);
+
+    if (tripType === "two" && isFirst && isSecond) {
     // 🌀 Shared airport toggle logic
-    if (selectedSecond === r.code) {
+      if (selectedSecond === r.code) {
       // 🔁 Promote to first destination
+        const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+        if (radio) {
+          radio.checked = true;
+          radio.scrollIntoView({ behavior: "smooth", block: "center" });
+          highlightAirport(r.code);
+          findSecondLeg(); // Refresh second-leg list
+        }
+      } else {
+      // 🎯 Set as second-leg
+        const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
+        if (radio) {
+          radio.checked = true;
+          radio.scrollIntoView({ behavior: "smooth", block: "center" });
+          drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
+        }
+      }
+      return;
+    }
+
+  // ✅ Regular first-leg or second-leg behavior
+    if (tripType === "two" && isFirst) {
       const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
         radio.scrollIntoView({ behavior: "smooth", block: "center" });
         highlightAirport(r.code);
-        findSecondLeg(); // Refresh second-leg list
+        findSecondLeg();
       }
-    } else {
-      // 🎯 Set as second-leg
+      return;
+    }
+
+    if (tripType === "two" && isSecond) {
       const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
         radio.scrollIntoView({ behavior: "smooth", block: "center" });
         drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
       }
+      return;
     }
-    return;
-  }
-
-  // ✅ Regular first-leg or second-leg behavior
-  if (tripType === "two" && isFirst) {
-    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-    if (radio) {
-      radio.checked = true;
-      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-      highlightAirport(r.code);
-      findSecondLeg();
-    }
-    return;
-  }
-
-  if (tripType === "two" && isSecond) {
-    const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
-    if (radio) {
-      radio.checked = true;
-      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-      drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
-    }
-    return;
-  }
 
   // One destination mode
-  if (tripType === "one") {
-    const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-    if (radio) {
-      radio.checked = true;
-      radio.scrollIntoView({ behavior: "smooth", block: "center" });
-      highlightAirport(r.code);
+    if (tripType === "one") {
+      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.scrollIntoView({ behavior: "smooth", block: "center" });
+        highlightAirport(r.code);
+      }
     }
-  }
-});
-
-//    marker.on("click", () => {
-//      const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${r.code}"]`);
-//      if (radio) {
-//        radio.checked = true;
-//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-//        drawTriangle(r.fromCode, r.code, r.homeCode);
-//      }
-//    });
-
-    secondLegMarkers.push(marker);
   });
 
-  // 🟪 Auto-draw triangle for first result
-  if (results.length > 0) {
-    drawTriangle(results[0].fromCode, results[0].code, results[0].homeCode);
-  }
+  });
+
 }
 
 function drawTriangle(firstCode, secondCode, homeCode) {
@@ -832,13 +809,6 @@ function drawTriangle(firstCode, secondCode, homeCode) {
 
   const remainingMin = Math.max(totalMin - leg1Distance, 0);
   const remainingMax = Math.max(totalMax - leg1Distance, 0);
-
-//console.log("Calling drawSecondLegRing with:", {
-//  firstCode, homeCode,
-//  leg1Distance,
-//  remainingMin,
-//  remainingMax
-//});
 
   drawSecondLegRing(firstAp, remainingMin, remainingMax);
 
@@ -895,6 +865,7 @@ function syncTotalLegLabel() {
 }
 
 function toggleTotalLeg() {
+  resetTripState(); 
   const isTriangle = document.getElementById("tripTriangle").checked;
   document.getElementById("totalTripSlider").style.display = isTriangle ? "block" : "none";
   document.getElementById("findBtn").textContent = isTriangle ? "Find First Leg Destinations" : "Find Destinations";
@@ -919,24 +890,11 @@ function finalizeSelection() {
   alert(`✅ Final Destination Selected:\n${code} - ${airport.airport_name}\n${airport.city}, ${airport.state}`);
 }
 
-
 function updateLabel(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
 }
 
-  function showSecondLegButtonIfReady() {
-    const results = document.getElementById("resultArea");
-    const secondBtn = document.getElementById("secondLegBtn");
-    if (results && results.querySelector(".first-destination")) {
-      secondBtn.style.display = "inline-block";
-    } else {
-      secondBtn.style.display = "none";
-    }
-  }
-
-
-// ========== Utility ==========
 function haversine(lat1, lon1, lat2, lon2) {
   const R = 3440.065;
   const toRad = deg => deg * Math.PI / 180;
@@ -1048,90 +1006,63 @@ function resetTripState() {
   }
 
   // 🧹 Remove triangle lines
-  triangleLines.forEach(line => map.removeLayer(line));
-  triangleLines = [];
-
-  // 🧹 Remove second-leg markers
-  if (secondLegMarkers && secondLegMarkers.length) {
-    secondLegMarkers.forEach(m => map.removeLayer(m));
-    secondLegMarkers = [];
+  if (triangleLines && triangleLines.length > 0) {
+    triangleLines.forEach(line => map.removeLayer(line));
+    triangleLines = [];
   }
 
-  // 🧹 Remove destination markers
-  if (destinationMarkers && destinationMarkers.length) {
-    destinationMarkers.forEach(m => map.removeLayer(m));
-    destinationMarkers = [];
-  }
+// 🧹 Remove destination markers
+if (Array.isArray(destinationMarkers)) {
+  let count = destinationMarkers.length;
+  destinationMarkers.forEach(marker => {
+    if (map.hasLayer(marker)) map.removeLayer(marker);
+  });
+  destinationMarkers = [];
+  console.log("✅ Cleared", count, "first-leg markers");
+}
 
-  // 🧹 Remove second-leg ring or ellipse
+// 🧹 Remove second-leg markers
+if (Array.isArray(secondLegMarkers)) {
+  let count = secondLegMarkers.length;
+  secondLegMarkers.forEach(marker => {
+    if (map.hasLayer(marker)) map.removeLayer(marker);
+  });
+  secondLegMarkers = [];
+  console.log("✅ Cleared", count, "second-leg markers");
+}
+
+  // 🧹 Remove second-leg ring (legacy) or ellipses
   if (secondLegRing) {
     map.removeLayer(secondLegRing);
     secondLegRing = null;
   }
 
-console.log("Removing second-leg markers:", secondLegMarkers);
-
-  if (secondLegMarkers && secondLegMarkers.length) {
-    secondLegMarkers.forEach(m => map.removeLayer(m));
-    secondLegMarkers = [];
+  if (secondLegEllipseInner) {
+    map.removeLayer(secondLegEllipseInner);
+    secondLegEllipseInner = null;
   }
 
-  // 🧹 Clear result areas
+  if (secondLegEllipseOuter) {
+    map.removeLayer(secondLegEllipseOuter);
+    secondLegEllipseOuter = null;
+  }
+
+  // 🧹 Clear results and UI
   document.getElementById("resultArea").innerHTML = `<p>No destinations yet. Click "Find Destinations" to search.</p>`;
   document.getElementById("secondLegArea").innerHTML = "";
 
   // 🧹 Hide second-leg button
   document.getElementById("secondLegBtn").style.display = "none";
 
+  // 🧭 Recenter the map to home base
   const homeCode = document.getElementById("airportSelect").value;
   const homeAp = airportData[homeCode];
   if (homeAp) {
-    map.setView([homeAp.lat, homeAp.lon], 8); // Adjust zoom level as needed
-  }
-}
-
-function showSharedPopup(marker, code) {
-  const popupContent = `
-    <strong>${code}</strong><br>
-    Appears in both lists. Use as:<br>
-    <button onclick="selectAsFirst('${code}')">🟣 First Destination</button><br>
-    <button onclick="selectAsSecond('${code}')">🟥 Second Destination</button>
-  `;
-
-  marker.bindPopup(popupContent).openPopup();
-}
-
-function selectAsFirst(code) {
-  const radio = document.querySelector(`input[type="radio"][name="firstLeg"][value="${code}"]`);
-  if (radio) {
-    radio.checked = true;
-    radio.scrollIntoView({ behavior: "smooth", block: "center" });
-    highlightAirport(code);
-
-    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-    if (tripType === "two") {
-      drawSecondLegEllipses(); // ➕ Add this to keep ellipse updated
-      findSecondLeg();
-    }
+    map.setView([homeAp.lat, homeAp.lon], 8); // Adjust zoom if needed
   }
 
-  map.closePopup(); // Clean up
+  console.log("✅ Trip state fully reset.");
 }
-
-function selectAsSecond(code) {
-  const radio = document.querySelector(`input[type="radio"][name="secondLeg"][value="${code}"]`);
-  if (radio) {
-    radio.checked = true;
-    radio.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    const firstCode = document.querySelector(`input[name="firstLeg"]:checked`)?.value;
-    const homeCode = document.getElementById("airportSelect").value;
-    drawTriangle(firstCode, code, homeCode);
-  }
-
-  map.closePopup(); // Clean up
-}
-
 
 function showTripSummary() {
   const homeCode = document.getElementById("airportSelect").value;
@@ -1246,65 +1177,6 @@ ${getRunways(dest)}
   document.getElementById("summaryModal").style.display = "block";
 }
 
-function computeEllipsePoints1(focus1, focus2, semiMajorNm, numPoints = 180) {
-  const toRad = deg => deg * Math.PI / 180;
-  const toDeg = rad => rad * 180 / Math.PI;
-  const R = 3440.065; // Earth radius in NM
-
-  const lat1 = toRad(focus1[0]);
-  const lon1 = toRad(focus1[1]);
-  const lat2 = toRad(focus2[0]);
-  const lon2 = toRad(focus2[1]);
-
-  // Convert both to 3D Cartesian
-  const x1 = R * Math.cos(lat1) * Math.cos(lon1);
-  const y1 = R * Math.cos(lat1) * Math.sin(lon1);
-  const z1 = R * Math.sin(lat1);
-
-  const x2 = R * Math.cos(lat2) * Math.cos(lon2);
-  const y2 = R * Math.cos(lat2) * Math.sin(lon2);
-  const z2 = R * Math.sin(lat2);
-
-  // Ellipse center (midpoint of foci in 3D)
-  const cx = (x1 + x2) / 2;
-  const cy = (y1 + y2) / 2;
-  const cz = (z1 + z2) / 2;
-
-  const centerLat = toDeg(Math.asin(cz / R));
-  const centerLon = toDeg(Math.atan2(cy, cx));
-  const center = [centerLat, centerLon];
-
-  // Distance between foci (c) and semi-minor axis (b)
-  const distanceBetweenFoci = haversine(focus1[0], focus1[1], focus2[0], focus2[1]);
-  const semiMinor = Math.sqrt(Math.max(0, semiMajorNm ** 2 - (distanceBetweenFoci / 2) ** 2));
-
-console.log("c:", distanceBetweenFoci, "semiMajor:", semiMajorNm, "semiMinor:", semiMinor);
-
-  // Fix: use correct rotation angle between foci
-  const bearing = computeBearing(focus1[0], focus1[1], focus2[0], focus2[1]);
-  const bearingRad = toRad(bearing);
-
-  const points = [];
-
-  for (let i = 0; i <= numPoints; i++) {
-    const theta = (2 * Math.PI * i) / numPoints;
-
-    const dx = semiMajorNm * Math.cos(theta);
-    const dy = semiMinor * Math.sin(theta);
-
-    // Rotate point by bearing
-    const xRot = dx * Math.cos(bearingRad) - dy * Math.sin(bearingRad);
-    const yRot = dx * Math.sin(bearingRad) + dy * Math.cos(bearingRad);
-
-    const distance = Math.sqrt(xRot ** 2 + yRot ** 2);
-    const angle = toDeg(Math.atan2(xRot, yRot));
-
-    points.push(destinationPoint(center[0], center[1], (angle + 360) % 360, distance));
-  }
-
-  return points;
-}
-
 function computeEllipsePoints(focusA, focusB, semiMajorNm, numPoints = 180) {
   const toRad = deg => deg * Math.PI / 180;
   const toDeg = rad => rad * 180 / Math.PI;
@@ -1347,49 +1219,6 @@ function computeEllipsePoints(focusA, focusB, semiMajorNm, numPoints = 180) {
     const [lat, lon] = destinationPoint(centerLat, centerLon, pointBearing, pointDistance);
     points.push([lat, lon]);
   }
-
-  return points;
-}
-
-
-function computeEllipsePoints3(focusA, focusB, semiMajorNm, numPoints = 180) {
-  const toRad = deg => deg * Math.PI / 180;
-  const toDeg = rad => rad * 180 / Math.PI;
-  const R = 3440.065; // Earth radius in NM
-
-  const [latA, lonA] = focusA;
-  const [latB, lonB] = focusB;
-
-  // Midpoint = ellipse center
-  const centerLat = (latA + latB) / 2;
-  const centerLon = (lonA + lonB) / 2;
-
-  // Distance between foci (c)
-  const c = haversine(latA, lonA, latB, lonB);
-
-  // Validate that total distance is large enough
-  if (semiMajorNm < c / 2) return []; // invalid ellipse
-
-  const semiMinor = Math.sqrt(semiMajorNm ** 2 - (c / 2) ** 2);
-
-  // Bearing from focusA to focusB
-
-  const bearing = computeBearing(focusA[0], focusA[1], focusB[0], focusB[1]);
-  const bearingRad = (Math.PI / 180) * bearing;
-
-  const dx = semiMajorNm * Math.cos(theta);
-  const dy = semiMinorNm * Math.sin(theta);
-
-// Rotate ellipse coordinates by bearing angle
-  const xRot = dx * Math.cos(bearingRad) - dy * Math.sin(bearingRad);
-  const yRot = dx * Math.sin(bearingRad) + dy * Math.cos(bearingRad);
-
-  const angleDeg = (Math.atan2(xRot, yRot) * 180) / Math.PI;
-  const distance = Math.sqrt(xRot ** 2 + yRot ** 2);
-
-  const [lat, lon] = destinationPoint(centerLat, centerLon, (angleDeg + 360) % 360, distance);
-  points.push([lat, lon]);
-
 
   return points;
 }
@@ -1502,73 +1331,37 @@ function drawSecondLegEllipses() {
 }
 
 function resetSecondLeg() {
+  // Clear second-leg results UI
   document.getElementById("secondLegArea").innerHTML = "";
 
+  // Remove second-leg markers
   if (window.secondLegMarkers) {
     secondLegMarkers.forEach(m => map.removeLayer(m));
     secondLegMarkers = [];
   }
 
+  // Remove triangle lines (second and third legs)
   if (triangleLines) {
     triangleLines.forEach(line => map.removeLayer(line));
     triangleLines = [];
   }
 
+  // Remove second-leg ellipses
   if (secondLegEllipseInner) {
     map.removeLayer(secondLegEllipseInner);
     secondLegEllipseInner = null;
   }
-
   if (secondLegEllipseOuter) {
     map.removeLayer(secondLegEllipseOuter);
     secondLegEllipseOuter = null;
   }
 
-  if (legLine) {
-    map.removeLayer(legLine);
-    legLine = null;
-  }
+  // Note: Do NOT remove legLine here to preserve first-leg visualization
+  console.log("Second-leg state reset, first-leg preserved.");
 }
-
-function resetTripState() {
-  document.getElementById("resultArea").innerHTML = "";
-  document.getElementById("secondLegArea").innerHTML = "";
-
-  if (window.destinationMarkers) {
-    destinationMarkers.forEach(m => map.removeLayer(m));
-    destinationMarkers = [];
-  }
-
-  if (window.secondLegMarkers) {
-    secondLegMarkers.forEach(m => map.removeLayer(m));
-    secondLegMarkers = [];
-  }
-
-  if (triangleLines) {
-    triangleLines.forEach(line => map.removeLayer(line));
-    triangleLines = [];
-  }
-
-  if (legLine) {
-    map.removeLayer(legLine);
-    legLine = null;
-  }
-
-  if (secondLegEllipseInner) {
-    map.removeLayer(secondLegEllipseInner);
-    secondLegEllipseInner = null;
-  }
-
-  if (secondLegEllipseOuter) {
-    map.removeLayer(secondLegEllipseOuter);
-    secondLegEllipseOuter = null;
-  }
-}
-
-
 
 function showCredits() {
-  alert(`🛫 Time Building Planner
+  alert(`🛫 Cross Country Flight Planner
 
 Version: ${APP_VERSION}
 Last Updated: ${FILE_DATE}
