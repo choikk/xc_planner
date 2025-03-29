@@ -4,6 +4,12 @@ import json
 
 # ✅ Set your path correctly
 path = "/Users/kchoi/Workspace/airport_json/28DaySubscription_Effective_2025-03-20/CSV_Data/20_Mar_2025_CSV"
+folder_name = os.path.basename(path)
+
+with open("db_versions.txt", "w") as f:
+    f.write(folder_name + "\n")
+
+print("✅ Version written to db_versions.txt:", folder_name)
 
 # === CONFIGURATION ===
 apt_base_csv = os.path.join(path,"APT_BASE.csv")
@@ -116,8 +122,14 @@ output_mini_path = os.path.join(output_dir, output_mini_file)
 
 with open(output_path, "w") as f:
     json.dump(airport_data, f, indent=2)
-with open(output_mini_path, "w") as f:
-    json.dump(airport_data, f, separators=(",", ":"))  # Minified version
+#with open(output_mini_path, "w") as f:
+#    json.dump(airport_data, f, separators=(",", ":"))  # Minified version
 
 print(f"✅ JSON with runways and airspace saved: {output_path} ({len(airport_data)} airports)")
+
+with open(os.path.join(output_dir, "db_versions.txt"), "w") as f:
+    f.write(folder_name + "\n")
+    
+print("✅ Version written to db_versions.txt:", folder_name)
+        
 

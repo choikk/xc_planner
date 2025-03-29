@@ -1,5 +1,6 @@
-const APP_VERSION = "v1.2.2"; // or whatever you like
-const FILE_DATE = new Date().toISOString().split("T")[0];
+let APP_VERSION = "v1.2.2"; // or whatever you like
+let FILE_DATE = new Date().toISOString().split("T")[0];
+let DATABASE_VERSION = "20_MAR_2025"; // default fallback
 
 let airportData = {};
 
@@ -1338,7 +1339,8 @@ function resetSecondLeg() {
 function showCredits() {
   alert(`🛫 Cross Country Flight Planner
 
-Version: ${APP_VERSION}
+Software Version: ${APP_VERSION}
+Database Version: ${DATABASE_VERSION}
 Last Updated: ${FILE_DATE}
 © 2025 pilot.drchoi@gmail.com
 Built with 💻 + ✈️
