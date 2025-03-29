@@ -710,41 +710,6 @@ function displaySecondLegResults(results) {
     const isFirst = destinationMarkers.includes(marker);
     const isSecond = secondLegMarkers.includes(marker);
 
-    if (tripType === "two" && isFirst && isSecond) {
-    // 🌀 Shared airport toggle logic
-      if (selectedSecond === r.code) {
-      // 🔁 Promote to first destination
-        const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-        if (radio) {
-          radio.checked = true;
-//          radio.scrollIntoView({ behavior: "smooth", block: "center" });
-          highlightAirport(r.code);
-          findSecondLeg(); // Refresh second-leg list
-        }
-      } else {
-      // 🎯 Set as second-leg
-        const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
-        if (radio) {
-          radio.checked = true;
-//          radio.scrollIntoView({ behavior: "smooth", block: "center" });
-          drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
-        }
-      }
-      return;
-    }
-
-  // ✅ Regular first-leg or second-leg behavior
-    if (tripType === "two" && isFirst) {
-      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-      if (radio) {
-        radio.checked = true;
-//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        highlightAirport(r.code);
-        findSecondLeg();
-      }
-      return;
-    }
-
     if (tripType === "two" && isSecond) {
       const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
       if (radio) {
