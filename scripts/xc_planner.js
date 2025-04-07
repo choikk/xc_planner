@@ -1,5 +1,5 @@
 let APP_VERSION = "v1.2.2"; // or whatever you like
-let FILE_DATE = new Date().toISOString().split("T")[0];
+let FILE_DATE = new Date(document.lastModified).toISOString().split("T")[0];
 let DATABASE_VERSION = "20_MAR_2025"; // default fallback
 
 let airportData = {};
@@ -45,6 +45,21 @@ const triangleMarker = (color) => L.divIcon({
   "></div>`
 });
 
+async function loadDatabaseVersion() {
+  try {
+    const response = await fetch("json_data/db_versions.txt");
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+
+    const text = await response.text();
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+    if (lines.length > 0) {
+      DATABASE_VERSION = lines[0];
+      console.log("📦 DATABASE_VERSION loaded:", DATABASE_VERSION);
+    }
+  } catch (err) {
+    console.error("❌ Failed to load DATABASE_VERSION:", err);
+  }
+}
 
 async function loadData() {
   try {
@@ -544,10 +559,10 @@ function displayResults(results) {
   // Initial setup for two-destination mode
   if (tripType === "two" && radios.length > 0) {
     const firstRadio = radios[0];
-    firstRadio.checked = true; // Ensure first is selected
-    highlightAirport(firstRadio.value);
-    drawSecondLegEllipses();
-    findSecondLeg();
+//    firstRadio.checked = true; // Ensure first is selected
+//    highlightAirport(firstRadio.value);
+//    drawSecondLegEllipses();
+//    findSecondLeg();
   }
 
 // Show second-leg button only if trip type is "two"
@@ -558,11 +573,11 @@ function displayResults(results) {
       secondBtn.textContent = "Find Second Leg"; // Optional: set button text
       secondBtn.onclick = () => {
         resetSecondLeg();  // Reset only second-leg state
-        findSecondLeg();   // Rerun second-leg search
-        drawSecondLegEllipses();
+//        findSecondLeg();   // Rerun second-leg search
+//        drawSecondLegEllipses();
 
         const firstLegCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
-        highlightAirport(firstLegCode);
+//        highlightAirport(firstLegCode);
       };
     } else {
       secondBtn.style.display = "none";
@@ -1311,7 +1326,7 @@ function resetSecondLeg() {
   document.getElementById("secondLegArea").innerHTML = "";
 
   // Remove second-leg markers
-  if (window.secondLegMarkers) {
+  if (secondLegMarkers) {
     secondLegMarkers.forEach(m => map.removeLayer(m));
     secondLegMarkers = [];
   }
@@ -1340,11 +1355,12 @@ function showCredits() {
   alert(`🛫 Cross Country Flight Planner
 
 Software Version: ${APP_VERSION}
-Database Version: ${DATABASE_VERSION}
 Last Updated: ${FILE_DATE}
-© 2025 pilot.drchoi@gmail.com
-Built with 💻 + ✈️
-All rights reserved.`);
+Database Version: ${DATABASE_VERSION}
+
+Built with 💻 + 🛩️  with lots of ❤️ 🩵
+© Copyright 2025 pilot.drchoi@gmail.com. All rights reserved.
+`);
 }
 
 
@@ -1364,7 +1380,12 @@ window.onload = () => {
 window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("firstLegMin").addEventListener("input", updateTotalLegMinFromFirstLeg);
   document.getElementById("firstLegMinInput").addEventListener("change", updateTotalLegMinFromFirstLeg);
+  document.getElementById("titleHeading").addEventListener("click", async () => {
+    await loadDatabaseVersion();
+    showCredits();
+  });
 });
+
 document.querySelectorAll('input[name="tripType"]').forEach(radio => {
   radio.addEventListener("change", resetTripState);
 });
