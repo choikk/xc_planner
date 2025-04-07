@@ -64,6 +64,23 @@
   .credits-button:hover {
     background-color: #e8e8e8;
   }
+/* styles for horizontal checkboxes */
+  .checkbox-group {
+    display: flex;
+    flex-wrap: wrap; /* Allows wrapping if the container is too narrow */
+    gap: 20px; /* Spacing between checkboxes, matches your inline-radio spacing */
+  }
+
+  .checkbox-group label {
+    display: inline-block; /* Overrides the global label { display: block } */
+    margin: 0; /* Removes extra margin from global label styling */
+  }
+
+  /* Optional: Adjust spacing for consistency */
+  section > div > strong {
+    margin-right: 10px; /* Adds a little space between the title and checkboxes */
+  }
+
   </style>
 <link
   rel="stylesheet"
@@ -100,19 +117,23 @@
     <h2>Destination Airports</h2>
     <div>
       <strong>Surface Type:</strong><br>
-      <label><input type="checkbox" class="surface" value="ASPH" checked> Asphalt</label>
-      <label><input type="checkbox" class="surface" value="CONC" checked> Concrete</label>
-      <label><input type="checkbox" class="surface" value="TURF"> Grass</label>
-      <label><input type="checkbox" class="surface" value="OTHER"> Other</label>
+      <div class="checkbox-group">
+        <label><input type="checkbox" class="surface" value="ASPH" checked> Asphalt</label>
+        <label><input type="checkbox" class="surface" value="CONC" checked> Concrete</label>
+        <label><input type="checkbox" class="surface" value="TURF"> Grass</label>
+        <label><input type="checkbox" class="surface" value="OTHER"> Other</label>
+      </div>
     </div>
 
     <div style="margin-top: 15px;">
       <strong>Airspace Classes:</strong><br>
-      <label><input type="checkbox" class="airspace" value="B"> Class B</label>
-      <label><input type="checkbox" class="airspace" value="C"> Class C</label>
-      <label><input type="checkbox" class="airspace" value="D" checked> Class D</label>
-      <label><input type="checkbox" class="airspace" value="E" checked> Class E</label>
-      <label><input type="checkbox" class="airspace" value="G" checked> Class G</label>
+      <div class="checkbox-group">
+        <label><input type="checkbox" class="airspace" value="B"> Class B</label>
+        <label><input type="checkbox" class="airspace" value="C"> Class C</label>
+        <label><input type="checkbox" class="airspace" value="D" checked> Class D</label>
+        <label><input type="checkbox" class="airspace" value="E" checked> Class E</label>
+        <label><input type="checkbox" class="airspace" value="G" checked> Class G</label>
+      </div>
     </div>
 
     <div class="slider-container">
@@ -137,11 +158,10 @@
           <input type="range" id="firstLegMax" min="10" max="500" step="10" value="100" oninput="syncFirstLegInputsFromSlider()">
         </div>
         <div style="display: flex; gap: 10px; margin-top: 5px;">
-          <input type="number" id="firstLegMinInput" min="10" max="500" step="10" value="50" onchange="syncFirstLegSlidersFromInput()">
+          <input type="number" id="firstLegMinInput" min="10" max="500" step="10" value="50">
           <span>–</span>
-          <input type="number" id="firstLegMaxInput" min="10" max="500" step="10" value="100" onchange="syncFirstLegSlidersFromInput()">
+          <input type="number" id="firstLegMaxInput" min="10" max="500" step="10" value="100">
         </div>
-        <span id="firstLegLabel">50 - 100 NM</span>
       </div>
     </div>
 
@@ -158,10 +178,16 @@
           <span>–</span>
           <input type="number" id="totalLegMaxInput" min="20" max="1500" step="10" value="200" onchange="syncTotalLegSlidersFromInput()">
         </div>
-        <span id="totalLegLabel">150 - 200 NM</span>
       </div>
     </div>
   </section>
+
+  <div style="margin-top: 10px;" class="inline-radio">
+    <strong>Sort results by:</strong><br>
+    <label><input type="radio" name="sortBy" value="leg_distance" checked onchange="sortCurrentResults()"> Leg Distance</label>
+    <label><input type="radio" name="sortBy" value="total_distance" onchange="sortCurrentResults()"> Total Distance</label>
+    <label><input type="radio" name="sortBy" value="alphabetical" onchange="sortCurrentResults()"> Alphabetical</label>
+  </div>
 
   <div style="margin-top: 20px; display: flex; gap: 10px;">
     <button id="findBtn" onclick="findDestinations()">Find First Leg Destinations</button>
@@ -169,7 +195,7 @@
   </div>
 
       <hr>
-      <h2>Matching Airports (Sort by distance)</h2>
+      <h2>Matching Airports</h2>
       <div id="resultArea" style="margin-top">
         <p>No destinations yet. Click "Find Destinations" to search.</p>
       </div>

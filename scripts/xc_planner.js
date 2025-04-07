@@ -20,6 +20,9 @@ let secondLegRing;
 let secondLegEllipseInner = null;
 let secondLegEllipseOuter = null;
 
+let currentFirstLegDestinations = [];
+let currentSecondLegDestinations = [];
+let currentLeg = 'first'; // Tracks the current active leg ('first' or 'second')
 
 const squareMarker = (color) => L.divIcon({
   className: "custom-square",
@@ -171,7 +174,6 @@ function updateMap(lat, lon, label) {
   addMapLegend();
 }
 
-
 function refreshDistanceCircles() {
   if (!map || !marker) return;
 
@@ -186,7 +188,6 @@ function refreshDistanceCircles() {
     if (layer) map.removeLayer(layer);
   });
 
-  // ✅ Thick green dashed circle (min distance)
   minCircle = L.circle(latlng, {
     radius: minMeters,
     color: "green",
@@ -195,7 +196,6 @@ function refreshDistanceCircles() {
     dashArray: "6 6"
   }).addTo(map);
 
-  // ✅ Thick red dashed circle (max distance)
   maxCircle = L.circle(latlng, {
     radius: maxMeters,
     color: "red",
@@ -204,7 +204,6 @@ function refreshDistanceCircles() {
     dashArray: "6 6"
   }).addTo(map);
 
-  // ✅ Min distance label at center
   const latOffset1 = (minMeters / 1852) / 60;
   minLabel = L.marker([latlng.lat + latOffset1, latlng.lng], {
     icon: L.divIcon({
@@ -214,7 +213,6 @@ function refreshDistanceCircles() {
     })
   }).addTo(map);
 
-  // ✅ Max distance label at top edge
   const latOffset2 = (maxMeters / 1852) / 60;
   maxLabel = L.marker([latlng.lat + latOffset2, latlng.lng], {
     icon: L.divIcon({
@@ -242,10 +240,28 @@ function updateLabel(id, value) {
 }
 
 function syncFirstLegInputsFromSlider() {
-  const min = document.getElementById("firstLegMin").value;
-  const max = document.getElementById("firstLegMax").value;
-  document.getElementById("firstLegMinInput").value = min;
-  document.getElementById("firstLegMaxInput").value = max;
+  const minSlider = document.getElementById("firstLegMin");
+  const maxSlider = document.getElementById("firstLegMax");
+  const minInput = document.getElementById("firstLegMinInput");
+  const maxInput = document.getElementById("firstLegMaxInput");
+
+  let min = parseInt(minSlider.value);
+  let max = parseInt(maxSlider.value);
+
+  // Enforce min/max bounds
+  min = Math.max(10, Math.min(min, 500));
+  max = Math.max(10, Math.min(max, 500));
+
+  // Ensure min <= max
+  if (min > max) {
+    minSlider.value = max; // Adjust slider if needed
+    min = max;
+  }
+
+  // Sync inputs
+  minInput.value = min;
+  maxInput.value = max;
+
   updateFirstLegLabel();
 }
 
@@ -274,44 +290,6 @@ function syncFirstLegSlidersFromInput() {
   updateFirstLegLabel();
 }
 
-function syncFirstLegMinFromInput() {
-  let min = parseInt(document.getElementById("firstLegMinInput").value);
-  let max = parseInt(document.getElementById("firstLegMaxInput").value);
-
-  min = Math.max(1, Math.min(min || 1, 500));
-  max = Math.max(1, Math.min(max || 1, 500));
-
-  if (min > max) {
-    max = min;
-  }
-
-  document.getElementById("firstLegMin").value = min;
-  document.getElementById("firstLegMax").value = max;
-  document.getElementById("firstLegMinInput").value = min;
-  document.getElementById("firstLegMaxInput").value = max;
-
-  updateFirstLegLabel();
-}
-
-function syncFirstLegMaxFromInput() {
-  let min = parseInt(document.getElementById("firstLegMinInput").value);
-  let max = parseInt(document.getElementById("firstLegMaxInput").value);
-
-  min = Math.max(1, Math.min(min || 1, 500));
-  max = Math.max(1, Math.min(max || 1, 500));
-
-  if (max < min) {
-    min = max;
-  }
-
-  document.getElementById("firstLegMin").value = min;
-  document.getElementById("firstLegMax").value = max;
-  document.getElementById("firstLegMinInput").value = min;
-  document.getElementById("firstLegMaxInput").value = max;
-
-  updateFirstLegLabel();
-}
-
 function updateFirstLegLabel() {
    let minVal = parseInt(document.getElementById("firstLegMin").value);
    let maxVal = parseInt(document.getElementById("firstLegMax").value);
@@ -322,7 +300,7 @@ function updateFirstLegLabel() {
      document.getElementById("firstLegMax").value = maxVal;
    }
 
-   document.getElementById("firstLegLabel").textContent = `${minVal} - ${maxVal} NM`;
+//   document.getElementById("firstLegLabel").textContent = `${minVal} - ${maxVal} NM`;
 }
 
 function updateTotalLegLabel() {
@@ -344,7 +322,7 @@ function updateTotalLegLabel() {
   document.getElementById("totalLegMinInput").value = min;
   document.getElementById("totalLegMaxInput").value = max;
 
-  document.getElementById("totalLegLabel").textContent = `${min} - ${max} NM`;
+//  document.getElementById("totalLegLabel").textContent = `${min} - ${max} NM`;
 }
 
   function updateTotalLegMinFromFirstLeg() {
@@ -455,10 +433,13 @@ function findDestinations() {
     });
   }
 
-  displayResults(results);
+  currentFirstLegDestinations = results;
+  currentLeg = 'first';
+  sortCurrentResults();
+  displayResults(currentFirstLegDestinations);
 }
 
-function displayResults(results) {
+function displayResults(results, selectedCode = null) {
   const div = document.getElementById("resultArea");
   const tripType = document.querySelector('input[name="tripType"]:checked').value;
 
@@ -467,15 +448,13 @@ function displayResults(results) {
     return;
   }
 
-  results.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
-
-  // Build the HTML for the results list
   let html = `<p>✅ ${results.length} destination(s) found:</p><ul class="result-list">`;
-  results.forEach((r, i) => {
+  results.forEach((r) => {
+    const isChecked = r.code === selectedCode ? "checked" : ""; // Preserve selection
     html += `
       <li>
         <label style="font-size: 1.0em;">
-          <input type="radio" name="firstLeg" value="${r.code}" ${i === 0 ? "checked" : ""}>
+          <input type="radio" name="firstLeg" value="${r.code}" ${isChecked}>
           <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft
         </label>
       </li>
@@ -503,7 +482,6 @@ function displayResults(results) {
     marker.airportCode = r.code;
     destinationMarkers.push(marker);
 
-    // Bind popup to each marker
     marker.bindPopup(() => {
       const popupContent = L.DomUtil.create("div");
       popupContent.innerHTML = `
@@ -521,7 +499,6 @@ function displayResults(results) {
       return popupContent;
     });
 
-    // Add click handler to sync with radio button
     marker.on("click", () => {
       const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
       if (radio) {
@@ -531,58 +508,42 @@ function displayResults(results) {
           drawSecondLegEllipses();
           findSecondLeg();
         }
-//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        marker.openPopup(); // Ensure popup opens on click
+        marker.openPopup();
       }
     });
   });
 
-  // Add change listener for radio buttons
+  // Re-attach event listeners for radio buttons
   const radios = document.querySelectorAll('input[name="firstLeg"]');
   if (tripType === "two") {
     radios.forEach(radio => {
       radio.addEventListener("change", () => {
         const code = radio.value;
-        highlightAirport(code);      // Update map for first leg
-        drawSecondLegEllipses();     // Draw ellipses for second leg
-        findSecondLeg();             // Find second-leg options
+        highlightAirport(code);
+        drawSecondLegEllipses();
+        findSecondLeg();
       });
     });
   } else {
     radios.forEach(radio => {
       radio.addEventListener("change", () => {
-        const code = radio.value;  
-        highlightAirport(code);      // Update map for first leg
+        const code = radio.value;
+        highlightAirport(code);
       });
     });
   }
-  // Initial setup for two-destination mode
-  if (tripType === "two" && radios.length > 0) {
-    const firstRadio = radios[0];
-//    firstRadio.checked = true; // Ensure first is selected
-//    highlightAirport(firstRadio.value);
-//    drawSecondLegEllipses();
-//    findSecondLeg();
-  }
 
-// Show second-leg button only if trip type is "two"
+  // Update UI for second-leg button
   const secondBtn = document.getElementById("secondLegBtn");
-  if (secondBtn) { // Check if the button exists in the DOM
+  if (secondBtn) {
     if (tripType === "two") {
       secondBtn.style.display = "inline-block";
-      secondBtn.textContent = "Find Second Leg"; // Optional: set button text
-      secondBtn.onclick = () => {
-        resetSecondLeg();  // Reset only second-leg state
-//        findSecondLeg();   // Rerun second-leg search
-//        drawSecondLegEllipses();
-
-        const firstLegCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
-//        highlightAirport(firstLegCode);
-      };
+      secondBtn.textContent = "Find Second Leg";
     } else {
       secondBtn.style.display = "none";
     }
   }
+
   window.matchedDestinations = results;
 }
 
@@ -644,10 +605,45 @@ function findSecondLeg() {
     }
   }
 
-  displaySecondLegResults(secondLegResults);
+  currentSecondLegDestinations = secondLegResults;
+  currentLeg = 'second';
+  sortCurrentResults();
+  displaySecondLegResults(currentSecondLegDestinations);
 }
 
-function displaySecondLegResults(results) {
+function sortCurrentResults() {
+  let sortBy = document.querySelector('input[name="sortBy"]:checked').value;
+
+  // Capture the currently selected airports for both legs
+  const selectedFirstCode = document.querySelector('input[name="firstLeg"]:checked')?.value || null;
+  const selectedSecondCode = document.querySelector('input[name="secondLeg"]:checked')?.value || null;
+
+  // Sort first-leg destinations
+  if (currentFirstLegDestinations.length > 0) {
+    if (sortBy === 'leg_distance') {
+      currentFirstLegDestinations.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
+    } else if (sortBy === 'alphabetical') {
+      currentFirstLegDestinations.sort((a, b) => a.code.localeCompare(b.code));
+    } else if (sortBy === 'total_distance') {
+      currentFirstLegDestinations.sort((a, b) => parseFloat(a.distance * 2) - parseFloat(b.distance * 2));
+    }
+    displayResults(currentFirstLegDestinations, selectedFirstCode);
+  }
+
+  // Sort second-leg destinations (if they exist)
+  if (currentSecondLegDestinations.length > 0) {
+    if (sortBy === 'leg_distance') {
+      currentSecondLegDestinations.sort((a, b) => parseFloat(a.leg2Distance) - parseFloat(b.leg2Distance));
+    } else if (sortBy === 'alphabetical') {
+      currentSecondLegDestinations.sort((a, b) => a.code.localeCompare(b.code));
+    } else if (sortBy === 'total_distance') {
+      currentSecondLegDestinations.sort((a, b) => parseFloat(a.totalDistance) - parseFloat(b.totalDistance));
+    }
+    displaySecondLegResults(currentSecondLegDestinations, selectedSecondCode);
+  }
+}
+
+function displaySecondLegResults(results, selectedCode = null) {
   const div = document.getElementById("secondLegArea");
 
   if (results.length === 0) {
@@ -655,27 +651,23 @@ function displaySecondLegResults(results) {
     return;
   }
 
-  // ✅ Sort by distance
-  results.sort((a, b) => a.totalDistance - b.totalDistance);
-
-  let html = `<h3>Second Leg Destinations (Sort by total trip distance)</h3>`;
+  let html = `<h3>Second Leg Destinations</h3>`;
   html += `<p>✅ ${results.length} second-leg destination(s) found:</p><ul class="result-list">`;
-  results.forEach((r, i) => {
+  results.forEach((r) => {
+    const isChecked = r.code === selectedCode ? "checked" : ""; // Preserve selection
     html += `
       <li>
         <label style="font-size: 1.0em;">
-          <input type="radio" name="secondLeg" value="${r.code}" onchange="drawTriangle('${r.fromCode}', '${r.code}', '${r.homeCode}')">
+          <input type="radio" name="secondLeg" value="${r.code}" ${isChecked} onchange="drawTriangle('${r.fromCode}', '${r.code}', '${r.homeCode}')">
           <strong>${r.code}</strong> (${r.totalDistance} NM) – ${r.name}, ${r.city}, ${r.state}
         </label>
       </li>
     `;
   });
   html += "</ul>";
-
-//  html += `<button onclick="finalizeSelection()">Confirm Final Destination</button>`;
   div.innerHTML = html;
 
-  // 🔁 Clear previous second-leg markers
+  // Clear previous second-leg markers
   if (secondLegMarkers) {
     secondLegMarkers.forEach(m => map.removeLayer(m));
     secondLegMarkers = [];
@@ -683,19 +675,14 @@ function displaySecondLegResults(results) {
 
   const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
   const homeCode = document.getElementById("airportSelect").value;
-  const firstAp = airportData[firstCode];
-  const homeAp = airportData[homeCode];
 
-  // 🟪 Add square markers
   results.forEach(r => {
     const ap = airportData[r.code];
     const color = getAirspaceColor(ap.airspace);
 
-    const latOffset = 0.025;
-    const lonOffset = latOffset / Math.cos(ap.lat * Math.PI / 180);
-    
     const marker = L.marker([ap.lat, ap.lon], {
-      icon: squareMarker(color) // or triangleIcon(color)
+      representedBy: 'secondLegMarkers',
+      icon: squareMarker(color)
     }).addTo(map)
       .bindPopup(`
         <strong>${r.code}</strong> (Class ${ap.airspace})<br>
@@ -718,37 +705,14 @@ function displaySecondLegResults(results) {
 
     secondLegMarkers.push(marker);
 
-  marker.on("click", () => {
-    const tripType = document.querySelector('input[name="tripType"]:checked')?.value;
-    const selectedFirst = document.querySelector('input[name="firstLeg"]:checked')?.value;
-    const selectedSecond = document.querySelector('input[name="secondLeg"]:checked')?.value;
-
-    const isFirst = destinationMarkers.includes(marker);
-    const isSecond = secondLegMarkers.includes(marker);
-
-    if (tripType === "two" && isSecond) {
+    marker.on("click", () => {
       const radio = document.querySelector(`input[name="secondLeg"][value="${r.code}"]`);
       if (radio) {
         radio.checked = true;
-//       radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        drawTriangle(selectedFirst, r.code, document.getElementById("airportSelect").value);
+        drawTriangle(r.fromCode, r.code, r.homeCode);
       }
-      return;
-    }
-
-  // One destination mode
-    if (tripType === "one") {
-      const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
-      if (radio) {
-        radio.checked = true;
-//        radio.scrollIntoView({ behavior: "smooth", block: "center" });
-        highlightAirport(r.code);
-      }
-    }
+    });
   });
-
-  });
-
 }
 
 function drawTriangle(firstCode, secondCode, homeCode) {
@@ -758,6 +722,7 @@ function drawTriangle(firstCode, secondCode, homeCode) {
 
   if (legLine) {
     map.removeLayer(legLine);
+    legLine = null;
   }
 
   if (!first || !second || !home) {
@@ -765,30 +730,39 @@ function drawTriangle(firstCode, secondCode, homeCode) {
     return;
   }
 
-  // Clear previous lines
+  // Clear previous lines and labels
   triangleLines.forEach(line => map.removeLayer(line));
   triangleLines = [];
+  if (window.triangleLabels) { // Store labels for triangle legs
+    window.triangleLabels.forEach(label => map.removeLayer(label));
+    window.triangleLabels = [];
+  }
 
-  // Define all 3 legs
+  // Define all 3 legs with their coordinates
   const legs = [
-    [home, first],
-    [first, second],
-    [second, home]
+    { start: home, end: first, desc: `${homeCode} to ${firstCode}` },
+    { start: first, end: second, desc: `${firstCode} to ${secondCode}` },
+    { start: second, end: home, desc: `${secondCode} to ${homeCode}` }
   ];
 
-  // Draw each leg
-  legs.forEach(([from, to]) => {
+  window.triangleLabels = []; // Initialize array for labels
+
+  // Draw each leg and add label
+  legs.forEach(({ start, end, desc }) => {
     const line = L.polyline([
-      [from.lat, from.lon],
-      [to.lat, to.lon]
+      [start.lat, start.lon],
+      [end.lat, end.lon]
     ], {
-      color: "#FF00FF",       // Magenta
+      color: "#FF00FF",
       weight: 5,
-//      dashArray: "5, 5",
       opacity: 0.8
     }).addTo(map);
 
     triangleLines.push(line);
+
+    // Add distance label
+    const label = addDistanceLabel(start.lat, start.lon, end.lat, end.lon);
+    window.triangleLabels.push(label);
   });
 
   const firstAp = airportData[firstCode];
@@ -802,7 +776,6 @@ function drawTriangle(firstCode, secondCode, homeCode) {
   const remainingMax = Math.max(totalMax - leg1Distance, 0);
 
   drawSecondLegRing(firstAp, remainingMin, remainingMax);
-
 }
 
 function drawSecondLegRing(centerAirport, minNM, maxNM) {
@@ -852,7 +825,7 @@ function drawSecondLegRing(centerAirport, minNM, maxNM) {
 function syncTotalLegLabel() {
   const min = document.getElementById("totalLegMin").value;
   const max = document.getElementById("totalLegMax").value;
-  document.getElementById("totalLegLabel").textContent = `${min} - ${max} NM`;
+//  document.getElementById("totalLegLabel").textContent = `${min} - ${max} NM`;
 }
 
 function toggleTotalLeg() {
@@ -950,7 +923,6 @@ function highlightAirport(code) {
   const marker = destinationMarkers.find(m => m.airportCode === code);
   if (!marker) return;
 
-  // Open popup and zoom
   marker.openPopup();
   map.setView(marker.getLatLng(), map.getZoom());
 
@@ -960,20 +932,35 @@ function highlightAirport(code) {
 
   if (!ap || !homeAp) return;
 
-  // Remove existing leg line if any
-  if (legLine) map.removeLayer(legLine);
+  // Thorough cleanup of previous first-leg elements
+  if (legLine) {
+    map.removeLayer(legLine);
+    legLine = null;
+  }
+  if (window.legLabel) {
+    map.removeLayer(window.legLabel);
+    window.legLabel = null;
+  }
+
+  // Clear triangle elements if they exist (to avoid overlap)
   if (triangleLines && triangleLines.length > 0) {
     triangleLines.forEach(line => map.removeLayer(line));
     triangleLines = [];
   }
+  if (window.triangleLabels) {
+    window.triangleLabels.forEach(label => map.removeLayer(label));
+    window.triangleLabels = [];
+  }
 
-  // Draw a straight magenta line
+  // Draw new magenta line
   legLine = L.polyline([[homeAp.lat, homeAp.lon], [ap.lat, ap.lon]], {
-    color: "#FF00FF", // Magenta
+    color: "#FF00FF",
     weight: 5,
-//    dashArray: "5, 5",
     opacity: 0.8
   }).addTo(map);
+
+  // Add new distance label
+  window.legLabel = addDistanceLabel(homeAp.lat, homeAp.lon, ap.lat, ap.lon);
 }
 
 function formatSurface(code) {
@@ -990,69 +977,123 @@ function formatSurface(code) {
 }
 
 function resetTripState() {
-  // 🧹 Remove first-leg line
+  // Remove first-leg line
   if (legLine) {
     map.removeLayer(legLine);
     legLine = null;
   }
 
-  // 🧹 Remove triangle lines
+  // Remove first-leg label
+  if (window.legLabel) {
+    map.removeLayer(window.legLabel);
+    window.legLabel = null;
+  }
+
+  // Remove triangle lines
   if (triangleLines && triangleLines.length > 0) {
     triangleLines.forEach(line => map.removeLayer(line));
     triangleLines = [];
   }
 
-// 🧹 Remove destination markers
-if (Array.isArray(destinationMarkers)) {
-  let count = destinationMarkers.length;
-  destinationMarkers.forEach(marker => {
-    if (map.hasLayer(marker)) map.removeLayer(marker);
-  });
-  destinationMarkers = [];
-  console.log("✅ Cleared", count, "first-leg markers");
-}
+  // Remove triangle labels
+  if (window.triangleLabels) {
+    window.triangleLabels.forEach(label => map.removeLayer(label));
+    window.triangleLabels = [];
+  }
 
-// 🧹 Remove second-leg markers
-if (Array.isArray(secondLegMarkers)) {
-  let count = secondLegMarkers.length;
-  secondLegMarkers.forEach(marker => {
-    if (map.hasLayer(marker)) map.removeLayer(marker);
-  });
-  secondLegMarkers = [];
-  console.log("✅ Cleared", count, "second-leg markers");
-}
+  // Remove first-leg markers
+  if (Array.isArray(destinationMarkers)) {
+    destinationMarkers.forEach(marker => {
+      if (map.hasLayer(marker)) map.removeLayer(marker);
+    });
+    destinationMarkers = [];
+  }
 
-  // 🧹 Remove second-leg ring (legacy) or ellipses
+  // Remove second-leg markers
+  if (Array.isArray(secondLegMarkers)) {
+    secondLegMarkers.forEach(marker => {
+      if (map.hasLayer(marker)) map.removeLayer(marker);
+    });
+    secondLegMarkers = [];
+  }
+
+  // Remove second-leg ring or ellipses
   if (secondLegRing) {
     map.removeLayer(secondLegRing);
     secondLegRing = null;
   }
-
   if (secondLegEllipseInner) {
     map.removeLayer(secondLegEllipseInner);
     secondLegEllipseInner = null;
   }
-
   if (secondLegEllipseOuter) {
     map.removeLayer(secondLegEllipseOuter);
     secondLegEllipseOuter = null;
   }
 
-  // 🧹 Clear results and UI
+  // Clear results and UI
   document.getElementById("resultArea").innerHTML = `<p>No destinations yet. Click "Find Destinations" to search.</p>`;
   document.getElementById("secondLegArea").innerHTML = "";
 
-  // 🧹 Hide second-leg button
+  // Hide second-leg button
   document.getElementById("secondLegBtn").style.display = "none";
 
-  // 🧭 Recenter the map to home base
+  // Reset current leg tracking
+  currentLeg = 'first';
+  currentFirstLegDestinations = [];
+  currentSecondLegDestinations = [];
+
+  // Recenter the map to home base
   const homeCode = document.getElementById("airportSelect").value;
   const homeAp = airportData[homeCode];
   if (homeAp) {
-    map.setView([homeAp.lat, homeAp.lon], 8); // Adjust zoom if needed
+    map.setView([homeAp.lat, homeAp.lon], 8);
+    if (marker) {
+      map.removeLayer(marker);
+    }
+    marker = L.marker([homeAp.lat, homeAp.lon])
+      .addTo(map)
+      .bindPopup(`${homeCode} - ${homeAp.airport_name}`)
+      .openPopup();
+    refreshDistanceCircles();
   }
 
   console.log("✅ Trip state fully reset.");
+}
+
+function addDistanceLabel(startLat, startLon, endLat, endLon, color = "#000000") {
+  // Calculate distance in NM
+  const distance = haversine(startLat, startLon, endLat, endLon).toFixed(1);
+
+  // Calculate midpoint (no offset)
+  const midLat = (startLat + endLat) / 2;
+  const midLon = (startLon + endLon) / 2;
+
+  // Calculate angle in degrees
+  const deltaLat = endLat - startLat;
+  const deltaLon = endLon - startLon;
+  const angleRad = Math.PI/2 + Math.atan2(deltaLon, deltaLat); // Angle in radians
+  let angleDeg = angleRad * 180 / Math.PI; // Convert to degrees
+
+  // Normalize angle to avoid upside-down text
+  if (angleDeg > 90) {
+    angleDeg -= 180;
+  } else if (angleDeg < -90) {
+    angleDeg += 180;
+  }
+
+  // Create a label centered on the line
+  const label = L.marker([midLat, midLon], {
+    icon: L.divIcon({
+      className: "distance-label",
+      html: `<div style="color: ${color}; font-size: 10px; font-style: italic; white-space: nowrap; background-color: rgba(255, 255, 255, 0.5); display: inline-block; transform: rotate(${angleDeg}deg); transform-origin: center;">${distance} NM</div>`,
+      iconSize: [0, 0], // No intrinsic size
+      iconAnchor: [15, 5] // Center the label
+    }),
+    interactive: false // Prevent mouse events on the label
+  }).addTo(map);
+
+  return label;
 }
 
 function showTripSummary() {
@@ -1363,18 +1404,31 @@ Built with 💻 + 🛩️  with lots of ❤️ 🩵
 `);
 }
 
-
 window.onload = () => {
   initMap();
   loadData();
   updateFirstLegLabel();
   syncTotalLegLabel();
-  // Update map circles when sliders or inputs change
-  document.getElementById("firstLegMin").addEventListener("input", refreshDistanceCircles);
-  document.getElementById("firstLegMax").addEventListener("input", refreshDistanceCircles);
-  document.getElementById("firstLegMinInput").addEventListener("input", refreshDistanceCircles);
-  document.getElementById("firstLegMaxInput").addEventListener("input", refreshDistanceCircles);
 
+  // Elements to sync
+  const sliders = ["firstLegMin", "firstLegMax"];
+  const inputs = ["firstLegMinInput", "firstLegMaxInput"];
+
+  // Sliders update inputs and map
+  sliders.forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
+      syncFirstLegInputsFromSlider(); // Sync inputs from sliders
+      refreshDistanceCircles();       // Update map
+    });
+  });
+
+  // Inputs update sliders and map
+  inputs.forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
+      syncFirstLegSlidersFromInput(); // Sync sliders from inputs
+      refreshDistanceCircles();       // Update map
+    });
+  });
 };
 
 window.addEventListener("DOMContentLoaded", () => {
