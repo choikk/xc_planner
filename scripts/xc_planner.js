@@ -1121,14 +1121,21 @@ function showTripSummary() {
   const leg3 = haversine(second.lat, second.lon, home.lat, home.lon).toFixed(1);
   const total = (parseFloat(leg1) + parseFloat(leg2) + parseFloat(leg3)).toFixed(1);
 
+// Fixed-width formatting for trip legs
+  const codeWidth = 4; // Max width for airport codes (e.g., "KJFK" = 4, pad to 6)
+  const distanceWidth = 6; // Max width for distance (e.g., "123.4" = 5, pad to 6)
+
+  const leg1Line = `${homeCode.padEnd(codeWidth)} ➝ ${firstCode.padEnd(codeWidth)}  : ${leg1.padStart(distanceWidth)} NM`;
+  const leg2Line = `${firstCode.padEnd(codeWidth)} ➝ ${secondCode.padEnd(codeWidth)}  : ${leg2.padStart(distanceWidth)} NM`;
+  const leg3Line = `${secondCode.padEnd(codeWidth)} ➝ ${homeCode.padEnd(codeWidth)}  : ${leg3.padStart(distanceWidth)} NM`;
   const summary = `
 🛫 Airports
 
 Departure:
-  Airport ID: ${homeCode}
-  Airspace  : Class ${home.airspace}
-  Name      : ${home.airport_name}
-  Runways   :
+  Airport ID   : ${homeCode}
+  Airspace     : Class ${home.airspace}
+  Name         : ${home.airport_name}
+  Runways      :
 ${getRunways(home)}
 
 1st Destination:
@@ -1147,9 +1154,9 @@ ${getRunways(second)}
 
 📏 Trip Summary
 
-  ${homeCode} ➝ ${firstCode} : ${leg1} NM
-  ${firstCode} ➝ ${secondCode} : ${leg2} NM
-  ${secondCode} ➝ ${homeCode} : ${leg3} NM
+  ${leg1Line}
+  ${leg2Line}
+  ${leg3Line}
 
   Total Distance: ${total} NM
   `.trim();
@@ -1180,27 +1187,33 @@ function showTwoLegSummary() {
   const legBack = legOut; // symmetrical round trip
   const total = (parseFloat(legOut) * 2).toFixed(1);
 
+// Fixed-width formatting for trip legs
+  const codeWidth = 4; // Max width for airport codes (e.g., "KJFK" = 4, pad to 6)
+  const distanceWidth = 6; // Max width for distance (e.g., "123.4" = 5, pad to 6)
+  const leg1Line = `${homeCode.padEnd(codeWidth)} ➝ ${firstCode.padEnd(codeWidth)}  : ${legOut.padStart(distanceWidth)} NM`;
+  const leg2Line = `${firstCode.padEnd(codeWidth)} ➝ ${homeCode.padEnd(codeWidth)}  : ${legBack.padStart(distanceWidth)} NM`;
+
   const summary = `
 🛫 Airports
 
 Departure:
-  Airport ID: ${homeCode}
-  Airspace  : Class ${home.airspace}
-  Name      : ${home.airport_name}
-  Runways   :
+  Airport ID   : ${homeCode}
+  Airspace     : Class ${home.airspace}
+  Name         : ${home.airport_name}
+  Runways      :
 ${getRunways(home)}
 
-Destination :
-  Airport ID: ${firstCode}
-  Airspace  : Class ${dest.airspace}
-  Name: ${dest.airport_name}
-  Runways   :
+Destination:
+  Airport ID   : ${firstCode}
+  Airspace     : Class ${dest.airspace}
+  Name         : ${dest.airport_name}
+  Runways      :
 ${getRunways(dest)}
 
 📏 Trip Summary
 
-  ${homeCode} ➝ ${firstCode} : ${legOut} NM
-  ${firstCode} ➝ ${homeCode} : ${legBack} NM
+  ${leg1Line}
+  ${leg2Line}
 
   Total Distance: ${total} NM
 `.trim();
