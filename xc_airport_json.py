@@ -282,32 +282,19 @@ for _, row in df_base.iterrows():
         na = na + 1
 #        print(f"DEBUG: No approaches found for code: {code}, site_no: {site_no}")
 
-    country_code = str(row.get("COUNTRY_CODE", "")).strip()
-    state_name = str(row.get("STATE_NAME", "")).strip()
-    county_name = str(row.get("COUNTY_NAME", "")).strip()
-
-# Replace "nan" with "" to treat it as empty
-    if state_name.lower() == "nan":
-        state_name = ""
-    if county_name.lower() == "nan":
-        county_name = ""
-
-    state = state_name if state_name else (county_name if county_name else "unknown")
-
     airport_data[code] = {
         "site_no": site_no,
         "lat": float(row["LAT_DECIMAL"]),
         "lon": float(row["LONG_DECIMAL"]),
         "city": str(row.get("CITY", "")).strip(),
-        "state": state,
-        "country": country_code,
+        "state": str(row.get("STATE_NAME", "")).strip(),
+        "country": str(row.get("COUNTRY_CODE", "")).strip(),
         "airport_name": str(row.get("ARPT_NAME", "")).strip(),
         "runways": rwy_dict.get(site_no, []),
         "airspace": airspace["airspace"],
         "remarks": airspace["remarks"],
         "approaches": approaches
     }
-
 
 # === SAVE JSON ===
 output_dir = "json_data"
