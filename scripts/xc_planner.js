@@ -66,7 +66,7 @@ async function loadDatabaseVersion() {
 
 async function loadData() {
   try {
-    const response = await fetch("json_data/airport_base_info_with_runways_airspace.json");
+    const response = await fetch("json_data/airport_base_info_with_runways_airspace_approaches.json");
     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
     airportData = await response.json();
   } catch (err) {
@@ -94,34 +94,72 @@ async function loadData() {
   }
 
   populateSelect("countrySelect", [...countries].sort());
+
   document.getElementById("countrySelect").addEventListener("change", () => {
     const selectedCountry = document.getElementById("countrySelect").value;
-    populateSelect("stateSelect", [...statesByCountry[selectedCountry]].sort());
+    console.log(`Country selected: ${selectedCountry}`);
+    const states = [...statesByCountry[selectedCountry]].sort();
+
+    // Handle state dropdown
+    if (selectedCountry !== "US" && states.length === 1 && states[0] === "unknown") {
+      document.getElementById("stateSelect").innerHTML = '<option value="unknown">N/A</option>';
+      document.getElementById("stateSelect").disabled = true;
+    } else {
+      populateSelect("stateSelect", states);
+      document.getElementById("stateSelect").disabled = false;
+    }
     document.getElementById("airportSelect").innerHTML = "";
     document.getElementById("homeBaseInfo").innerHTML = "";
+
+    // Ensure first state is selected and triggers airport population
+    if (states.length > 0) {
+      const stateSelect = document.getElementById("stateSelect");
+      stateSelect.value = states[0];
+      console.log(`Auto-selecting state: ${states[0]}`);
+      const key = `${selectedCountry}-${states[0]}`;
+      const airports = airportsByState[key] || [];
+      console.log(`Airports for ${key}: ${airports.length}`);
+
+      // Populate airports immediately
+      populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
+      if (airports.length > 0) {
+        const airportSelect = document.getElementById("airportSelect");
+        airportSelect.value = airports[0].code;
+        console.log(`Auto-selecting airport: ${airports[0].code}`);
+        airportSelect.dispatchEvent(new Event("change"));
+      } else {
+        document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
+      }
+    }
   });
 
   document.getElementById("stateSelect").addEventListener("change", () => {
-    const key = `${document.getElementById("countrySelect").value}-${document.getElementById("stateSelect").value}`;
+    const selectedCountry = document.getElementById("countrySelect").value;
+    const selectedState = document.getElementById("stateSelect").value;
+    const key = `${selectedCountry}-${selectedState}`;
+    console.log(`State selected: ${selectedState}, Key: ${key}`);
     const airports = airportsByState[key] || [];
-    airports.sort((a, b) => a.code.localeCompare(b.code));
+    console.log(`Airports found: ${airports.length}`);
+
     populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
     if (airports.length > 0) {
-    // ✅ Select the first airport
-      document.getElementById("airportSelect").value = airports[0].code;
-
-    // ✅ Trigger change event to update info box and map
-      document.getElementById("airportSelect").dispatchEvent(new Event("change"));
+      const airportSelect = document.getElementById("airportSelect");
+      airportSelect.value = airports[0].code;
+      console.log(`Auto-selecting airport: ${airports[0].code}`);
+      airportSelect.dispatchEvent(new Event("change"));
+    } else {
+      document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
     }
   });
 
   document.getElementById("airportSelect").addEventListener("change", () => {
     const code = document.getElementById("airportSelect").value;
+    console.log(`Airport selected: ${code}`);
     const ap = airportData[code];
     if (!ap) return;
     document.getElementById("homeBaseInfo").innerHTML = `
       <strong>${code} - ${ap.airport_name}</strong><br>
-      ${ap.city}, ${ap.state}, ${ap.country}<br>
+      ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
       Airspace: ${ap.airspace}<br>
       <strong>Runways:</strong><br>
       ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
@@ -133,21 +171,6 @@ async function loadData() {
   // Default selection
   document.getElementById("countrySelect").value = "US";
   document.getElementById("countrySelect").dispatchEvent(new Event("change"));
-
-  setTimeout(() => {
-    const state = document.getElementById("stateSelect");
-    if (state.options.length > 0) {
-      state.selectedIndex = 0;
-      state.dispatchEvent(new Event("change"));
-      setTimeout(() => {
-        const airport = document.getElementById("airportSelect");
-        if (airport.options.length > 0) {
-          airport.selectedIndex = 0;
-          airport.dispatchEvent(new Event("change"));
-        }
-      }, 50);
-    }
-  }, 50);
 }
 
 function initMap() {
@@ -162,15 +185,16 @@ function initMap() {
   map.getPane("ellipsePane").style.zIndex = 299; // lower than default markers
 }
 
-function updateMap(lat, lon, label) {
+function updateMap(lat, lon, label, preserveZoom = true) {
   if (!map) return;
 
-  map.setView([lat, lon], 8);
+  const currentZoom = preserveZoom ? map.getZoom() : 8; // Default to 8 only if not preserving
+  map.setView([lat, lon], currentZoom);
 
   if (marker) map.removeLayer(marker);
   marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
 
-  refreshDistanceCircles(); // ← draw circles immediately
+  refreshDistanceCircles();
   addMapLegend();
 }
 
@@ -265,122 +289,90 @@ function syncFirstLegInputsFromSlider() {
   updateFirstLegLabel();
 }
 
-function syncFirstLegSlidersFromInput() {
-  const minInput = document.getElementById("firstLegMinInput");
-  const maxInput = document.getElementById("firstLegMaxInput");
-
-  let min = parseInt(minInput.value);
-  let max = parseInt(maxInput.value);
-
-  if (isNaN(min)) min = 1;
-  if (isNaN(max)) max = 1;
-
-  min = Math.max(1, Math.min(min, 500));
-  max = Math.max(1, Math.min(max, 500));
-
-  if (min > max) {
-    [min, max] = [max, min];
-  }
-
-  document.getElementById("firstLegMin").value = min;
-  document.getElementById("firstLegMax").value = max;
-  minInput.value = min;
-  maxInput.value = max;
-
-  updateFirstLegLabel();
-}
-
-function updateFirstLegLabel() {
-   let minVal = parseInt(document.getElementById("firstLegMin").value);
-   let maxVal = parseInt(document.getElementById("firstLegMax").value);
-
-   if (minVal > maxVal) {
-     [minVal, maxVal] = [maxVal, minVal];
-     document.getElementById("firstLegMin").value = minVal;
-     document.getElementById("firstLegMax").value = maxVal;
-   }
-
-//   document.getElementById("firstLegLabel").textContent = `${minVal} - ${maxVal} NM`;
-}
-
-function updateTotalLegLabel() {
-  let min = parseInt(document.getElementById("totalLegMin").value);
-  let max = parseInt(document.getElementById("totalLegMax").value);
-
-  if (isNaN(min)) min = 100;
-  if (isNaN(max)) max = 100;
-
-  min = Math.max(100, Math.min(min, 1500));
-  max = Math.max(100, Math.min(max, 1500));
-
-  if (min > max) {
-    [min, max] = [max, min];
-  }
-
-  document.getElementById("totalLegMin").value = min;
-  document.getElementById("totalLegMax").value = max;
-  document.getElementById("totalLegMinInput").value = min;
-  document.getElementById("totalLegMaxInput").value = max;
-
-//  document.getElementById("totalLegLabel").textContent = `${min} - ${max} NM`;
-}
-
-  function updateTotalLegMinFromFirstLeg() {
+function updateTotalLegConstraints() {
     const firstMin = parseInt(document.getElementById("firstLegMin").value);
-    const minTotal = Math.max(100, 2 * firstMin);
+    const requiredMin = Math.max(100, firstMin * 2);
+    const minSlider = document.getElementById("totalLegMin");
+    const maxSlider = document.getElementById("totalLegMax");
+    const minInput = document.getElementById("totalLegMinInput");
+    const maxInput = document.getElementById("totalLegMaxInput");
 
-    const totalMinSlider = document.getElementById("totalLegMin");
-    const totalMaxSlider = document.getElementById("totalLegMax");
-    const totalMinInput = document.getElementById("totalLegMinInput");
-    const totalMaxInput = document.getElementById("totalLegMaxInput");
+    minSlider.min = minInput.min = requiredMin;
+    maxSlider.min = maxInput.min = requiredMin;
 
-    totalMinSlider.min = minTotal;
-    totalMinInput.min = minTotal;
+    if (parseInt(minSlider.value) < requiredMin) minSlider.value = requiredMin;
+    if (parseInt(minInput.value) < requiredMin) minInput.value = requiredMin;
+    if (parseInt(maxSlider.value) < requiredMin) maxSlider.value = requiredMin;
+    if (parseInt(maxInput.value) < requiredMin) maxInput.value = requiredMin;
 
-    // Adjust current value if needed
-    if (parseInt(totalMinSlider.value) < minTotal) totalMinSlider.value = minTotal;
-    if (parseInt(totalMinInput.value) < minTotal) totalMinInput.value = minTotal;
-
-    // Ensure the max is at least the new min
-    if (parseInt(totalMaxSlider.value) < minTotal) totalMaxSlider.value = minTotal;
-    if (parseInt(totalMaxInput.value) < minTotal) totalMaxInput.value = minTotal;
-
-    updateTotalLegLabel();
-  }
-
-function updateTotalLegConstraints(firstMin) {
-  const requiredMin = Math.max(100, firstMin * 2);
-  const minInput = document.getElementById("totalLegMinInput");
-  const maxInput = document.getElementById("totalLegMaxInput");
-  const minSlider = document.getElementById("totalLegMin");
-  const maxSlider = document.getElementById("totalLegMax");
-
-  minSlider.min = minInput.min = requiredMin;
-  maxSlider.min = maxInput.min = requiredMin;
-
-  // Reset if below required
-  if (parseInt(minInput.value) < requiredMin) {
-    minInput.value = requiredMin;
-    minSlider.value = requiredMin;
-  }
-
-  syncTotalLegLabel();
+    updateDualSlider(minSlider, maxSlider, document.getElementById("totalLegMinValue"), document.getElementById("totalLegMaxValue"), minInput, maxInput, drawSecondLegEllipses);
 }
 
-function syncTotalLegInputsFromSlider() {
-  const min = document.getElementById("totalLegMin").value;
-  const max = document.getElementById("totalLegMax").value;
-  document.getElementById("totalLegMinInput").value = min;
-  document.getElementById("totalLegMaxInput").value = max;
-  updateTotalLegLabel();
+function updateDualSlider(sliderMin, sliderMax, valueMin, valueMax, inputMin, inputMax, callback) {
+    let minVal = parseInt(sliderMin.value);
+    let maxVal = parseInt(sliderMax.value);
+
+    // Ensure min <= max
+    if (minVal > maxVal) {
+        [minVal, maxVal] = [maxVal, minVal];
+        sliderMin.value = minVal;
+        sliderMax.value = maxVal;
+    }
+
+    // Update displayed values
+    valueMin.textContent = minVal;
+    valueMax.textContent = maxVal;
+
+    // Sync number inputs
+    inputMin.value = minVal;
+    inputMax.value = maxVal;
+
+    // Calculate percentages for range highlight
+    const minPercent = ((minVal - sliderMin.min) / (sliderMin.max - sliderMin.min)) * 100;
+    const maxPercent = ((maxVal - sliderMax.min) / (sliderMax.max - sliderMax.min)) * 100;
+
+    // Update CSS custom properties
+    const track = sliderMin.parentElement;
+    track.style.setProperty("--range-start", `${minPercent}%`);
+    track.style.setProperty("--range-width", `${maxPercent - minPercent}%`);
+
+    // Call additional update function (e.g., refreshDistanceCircles)
+    if (callback) callback();
 }
 
-function syncTotalLegSlidersFromInput() {
-  const min = parseInt(document.getElementById("totalLegMinInput").value);
-  const max = parseInt(document.getElementById("totalLegMaxInput").value);
-  document.getElementById("totalLegMin").value = min;
-  document.getElementById("totalLegMax").value = max;
-  updateTotalLegLabel();
+function syncSliderFromInput(sliderMin, sliderMax, inputMin, inputMax, callback) {
+    let minVal = parseInt(inputMin.value) || parseInt(inputMin.min);
+    let maxVal = parseInt(inputMax.value) || parseInt(inputMax.min);
+
+    minVal = Math.max(parseInt(sliderMin.min), Math.min(minVal, parseInt(sliderMin.max)));
+    maxVal = Math.max(parseInt(sliderMax.min), Math.min(maxVal, parseInt(sliderMax.max)));
+
+    if (minVal > maxVal) {
+        [minVal, maxVal] = [maxVal, minVal];
+    }
+
+    sliderMin.value = minVal;
+    sliderMax.value = maxVal;
+    updateDualSlider(sliderMin, sliderMax, inputMin.parentElement.previousElementSibling.querySelector("#" + sliderMin.id.replace("Min", "MinValue")), inputMax.parentElement.previousElementSibling.querySelector("#" + sliderMax.id.replace("Max", "MaxValue")), inputMin, inputMax, callback);
+}
+
+function updateTotalLegConstraints() {
+    const firstMin = parseInt(document.getElementById("firstLegMin").value);
+    const requiredMin = Math.max(100, firstMin * 2); // Minimum total distance is 2x first leg min, or 100 NM
+    const minSlider = document.getElementById("totalLegMin");
+    const maxSlider = document.getElementById("totalLegMax");
+    const minInput = document.getElementById("totalLegMinInput");
+    const maxInput = document.getElementById("totalLegMaxInput");
+
+    minSlider.min = minInput.min = requiredMin;
+    maxSlider.min = maxInput.min = requiredMin;
+
+    if (parseInt(minSlider.value) < requiredMin) minSlider.value = requiredMin;
+    if (parseInt(minInput.value) < requiredMin) minInput.value = requiredMin;
+    if (parseInt(maxSlider.value) < requiredMin) maxSlider.value = requiredMin;
+    if (parseInt(maxInput.value) < requiredMin) maxInput.value = requiredMin;
+
+    updateDualSlider(minSlider, maxSlider, document.getElementById("totalLegMinValue"), document.getElementById("totalLegMaxValue"), minInput, maxInput, drawSecondLegEllipses);
 }
 
 function findDestinations() {
@@ -455,7 +447,7 @@ function displayResults(results, selectedCode = null) {
       <li>
         <label style="font-size: 1.0em;">
           <input type="radio" name="firstLeg" value="${r.code}" ${isChecked}>
-          <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} | Airspace ${airportData[r.code].airspace}, Max RWY: ${getMaxRunway(airportData[r.code].runways)} ft
+          <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} 
         </label>
       </li>
     `;
@@ -1043,11 +1035,11 @@ function resetTripState() {
   currentFirstLegDestinations = [];
   currentSecondLegDestinations = [];
 
-  // Recenter the map to home base
+  // Recenter the map to home base, preserving current zoom
   const homeCode = document.getElementById("airportSelect").value;
   const homeAp = airportData[homeCode];
   if (homeAp) {
-    map.setView([homeAp.lat, homeAp.lon], 8);
+    map.setView([homeAp.lat, homeAp.lon], map.getZoom()); // Preserve zoom
     if (marker) {
       map.removeLayer(marker);
     }
@@ -1409,57 +1401,66 @@ function showCredits() {
   alert(`🛫 Cross Country Flight Planner
 
 Software Version: ${APP_VERSION}
-Last Updated: ${FILE_DATE}
+Last Modified: ${FILE_DATE}
 Database Version: ${DATABASE_VERSION}
 
-Built with 💻 + 🛩️  with lots of ❤️ 🩵
+Built with 💻 + 🛩️  with lots of ❤️🩵
 © Copyright 2025 pilot.drchoi@gmail.com. All rights reserved.
 `);
 }
 
 window.onload = () => {
-  initMap();
-  loadData();
-  updateFirstLegLabel();
-  syncTotalLegLabel();
+    initMap();
+    loadData();
 
-  // Elements to sync
-  const sliders = ["firstLegMin", "firstLegMax"];
-  const inputs = ["firstLegMinInput", "firstLegMaxInput"];
+    // First Leg Slider
+    const firstMin = document.getElementById("firstLegMin");
+    const firstMax = document.getElementById("firstLegMax");
+    const firstMinValue = document.getElementById("firstLegMinValue");
+    const firstMaxValue = document.getElementById("firstLegMaxValue");
+    const firstMinInput = document.getElementById("firstLegMinInput");
+    const firstMaxInput = document.getElementById("firstLegMaxInput");
 
-  // Sliders update inputs and map
-  sliders.forEach(id => {
-    document.getElementById(id).addEventListener("input", () => {
-      syncFirstLegInputsFromSlider(); // Sync inputs from sliders
-      refreshDistanceCircles();       // Update map
-    });
-  });
+    updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles);
 
-  // Inputs update sliders and map
-  inputs.forEach(id => {
-    document.getElementById(id).addEventListener("input", () => {
-      syncFirstLegSlidersFromInput(); // Sync sliders from inputs
-      refreshDistanceCircles();       // Update map
-    });
-  });
+    firstMin.addEventListener("input", () => updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles));
+    firstMax.addEventListener("input", () => updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles));
+    firstMinInput.addEventListener("input", () => syncSliderFromInput(firstMin, firstMax, firstMinInput, firstMaxInput, refreshDistanceCircles));
+    firstMaxInput.addEventListener("input", () => syncSliderFromInput(firstMin, firstMax, firstMinInput, firstMaxInput, refreshDistanceCircles));
+
+    // Total Leg Slider
+    const totalMin = document.getElementById("totalLegMin");
+    const totalMax = document.getElementById("totalLegMax");
+    const totalMinValue = document.getElementById("totalLegMinValue");
+    const totalMaxValue = document.getElementById("totalLegMaxValue");
+    const totalMinInput = document.getElementById("totalLegMinInput");
+    const totalMaxInput = document.getElementById("totalLegMaxInput");
+
+    updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses);
+
+    totalMin.addEventListener("input", () => updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+    totalMax.addEventListener("input", () => updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+    totalMinInput.addEventListener("input", () => syncSliderFromInput(totalMin, totalMax, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+    totalMaxInput.addEventListener("input", () => syncSliderFromInput(totalMin, totalMax, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+
+// Enforce total leg constraint on load
+    updateTotalLegConstraints();
 };
 
 window.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("firstLegMin").addEventListener("input", updateTotalLegMinFromFirstLeg);
-  document.getElementById("firstLegMinInput").addEventListener("change", updateTotalLegMinFromFirstLeg);
-  document.getElementById("titleHeading").addEventListener("click", async () => {
-    await loadDatabaseVersion();
-    showCredits();
-  });
+    document.getElementById("firstLegMin").addEventListener("input", () => {
+        updateTotalLegConstraints();
+    });
+    document.getElementById("firstLegMinInput").addEventListener("change", () => {
+        updateTotalLegConstraints();
+    });
+    document.getElementById("titleHeading").addEventListener("click", async () => {
+        await loadDatabaseVersion();
+        showCredits();
+    });
 });
 
 document.querySelectorAll('input[name="tripType"]').forEach(radio => {
   radio.addEventListener("change", resetTripState);
-});
-
-["totalLegMin", "totalLegMax", "totalLegMinInput", "totalLegMaxInput"].forEach(id => {
-  document.getElementById(id)?.addEventListener("input", () => {
-    drawSecondLegEllipses();
-  });
 });
 
