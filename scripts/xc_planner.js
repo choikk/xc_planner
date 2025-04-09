@@ -232,141 +232,6 @@ async function loadData() {
   }
 }
 
-async function loadData1() {
-  try {
-    const response = await fetch("json_data/airport_base_info_with_runways_airspace_approaches.json");
-    if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-    airportData = await response.json();
-  } catch (err) {
-    console.error("❌ Failed to load airport data:", err);
-    alert("Error loading airport data.");
-    return;
-  }
-
-  const countries = new Set();
-  const statesByCountry = {};
-  const airportsByState = {};
-
-  for (const code in airportData) {
-    const airport = airportData[code];
-    const country = airport.country || "Unknown";
-    const state = airport.state || "Unknown";
-
-    countries.add(country);
-    if (!statesByCountry[country]) statesByCountry[country] = new Set();
-    statesByCountry[country].add(state);
-
-    const key = `${country}-${state}`;
-    if (!airportsByState[key]) airportsByState[key] = [];
-    airportsByState[key].push({ code, name: airport.airport_name });
-  }
-
-  populateSelect("countrySelect", [...countries].sort());
-
-  document.getElementById("countrySelect").addEventListener("change", () => {
-    const selectedCountry = document.getElementById("countrySelect").value;
-    console.log(`Country selected: ${selectedCountry}`);
-    const states = [...statesByCountry[selectedCountry]].sort();
-
-    if (selectedCountry !== "US" && states.length === 1 && states[0] === "unknown") {
-      document.getElementById("stateSelect").innerHTML = '<option value="unknown">N/A</option>';
-      document.getElementById("stateSelect").disabled = true;
-    } else {
-      populateSelect("stateSelect", states);
-      document.getElementById("stateSelect").disabled = false;
-    }
-    document.getElementById("airportSelect").innerHTML = "";
-    document.getElementById("homeBaseInfo").innerHTML = "";
-
-    if (states.length > 0) {
-      const stateSelect = document.getElementById("stateSelect");
-      stateSelect.value = states[0];
-      console.log(`Auto-selecting state: ${states[0]}`);
-      const key = `${selectedCountry}-${states[0]}`;
-      const airports = airportsByState[key] || [];
-      // Sort airports alphabetically by code
-      airports.sort((a, b) => a.code.localeCompare(b.code));
-      console.log(`Airports for ${key}: ${airports.length}`);
-
-      populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
-      if (airports.length > 0) {
-        const airportSelect = document.getElementById("airportSelect");
-        const code = airports[0].code; // Explicitly set code
-        airportSelect.value = code;    // Set the dropdown value
-        const ap = airportData[code];
-        console.log(`Auto-selecting airport: ${code}`);
-
-        document.getElementById("homeBaseInfo").innerHTML = `
-          <strong>${ap.code} - ${ap.airport_name}</strong><br>
-          ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
-          Airspace: ${ap.airspace}<br>
-          <strong>Runways:</strong><br>
-          ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
-        `;
-        updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-        map.setView([ap.lat, ap.lon], 7);
-      } else {
-        document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
-      }
-    }
-  });
-
-  document.getElementById("stateSelect").addEventListener("change", () => {
-    const selectedCountry = document.getElementById("countrySelect").value;
-    const selectedState = document.getElementById("stateSelect").value;
-    const key = `${selectedCountry}-${selectedState}`;
-    console.log(`State selected: ${selectedState}, Key: ${key}`);
-    const airports = airportsByState[key] || [];
-    // Sort airports alphabetically by code
-    airports.sort((a, b) => a.code.localeCompare(b.code));
-    console.log(`Airports found: ${airports.length}`);
-
-    populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
-    if (airports.length > 0) {
-      const airportSelect = document.getElementById("airportSelect");
-      const code = airports[0].code; // Explicitly set code
-      airportSelect.value = code;    // Set the dropdown value
-      const ap = airportData[code];
-      console.log(`Auto-selecting airport: ${code}`);
-
-      document.getElementById("homeBaseInfo").innerHTML = `
-        <strong>${ap.code} - ${ap.airport_name}</strong><br>
-        ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
-        Airspace: ${ap.airspace}<br>
-        <strong>Runways:</strong><br>
-        ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
-      `;
-      updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-      map.setView([ap.lat, ap.lon], 7);
-    } else {
-      document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
-    }
-  });
-
-  const airportSelect = document.getElementById("airportSelect");
-  airportSelect.addEventListener("change", () => {
-    const code = airportSelect.value;
-    console.log(`Airport selected: ${code}`);
-    const ap = airportData[code];
-    if (!ap) return;
-    document.getElementById("homeBaseInfo").innerHTML = `
-      <strong>${code} - ${ap.airport_name}</strong><br>
-      ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
-      Airspace: ${ap.airspace}<br>
-      <strong>Runways:</strong><br>
-      ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
-    `;
-    updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-    resetTripState();
-    map.setView([ap.lat, ap.lon], 7);
-  });
-
-  // Set initial values but don’t trigger search
-  document.getElementById("countrySelect").value = "US";
-  const initialCountryEvent = new Event("change");
-  document.getElementById("countrySelect").dispatchEvent(initialCountryEvent);
-}
-
 function initMap() {
   map = L.map("map").setView([39.8283, -98.5795], 7); // Centered on U.S.
 
@@ -1477,29 +1342,47 @@ function showTripSummary() {
         <p>${secondCode} ➝ ${homeCode}: ${leg3.toFixed(1)} NM</p>
         <p><strong>Total Distance:</strong> ${totalDist.toFixed(1)} NM</p>
       </div>
+      <div class="map-section">
+        <h3>Map Snapshot</h3>
+        <div id="mapSnapshot"></div>
+      </div>
     </div>
   `;
 
   const styles = `
     <style>
-      body { font-family: 'Arial', sans-serif; margin: 20px; background-color: #f5f6f5; color: #333; line-height: 1.6; }
-      .summary-container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-      h1 { font-size: 24px; color: #1a73e8; text-align: center; margin-bottom: 20px; }
-      .airport-section { margin-bottom: 20px; padding: 15px; background-color: #fafafa; border-left: 4px solid #1a73e8; border-radius: 4px; }
-      h2 { font-size: 18px; color: #555; margin: 0 0 10px 0; }
-      .airport-info { font-size: 16px; margin: 0 0 10px 0; }
-      .airspace { font-size: 14px; color: #777; }
-      .details { font-size: 14px; margin: 0; }
-      .distance-section { text-align: center; padding: 15px; background-color: #e8f0fe; border-radius: 4px; }
-      h3 { font-size: 16px; color: #1a73e8; margin: 0 0 10px 0; }
-      p { margin: 5px 0; }
+      body { font-family: 'Arial', sans-serif; margin: 10px; background-color: #f5f6f5; color: #333; line-height: 1.4; }
+      .summary-container { max-width: 600px; margin: 0 auto; padding: 15px; background-color: #fff; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+      h1 { font-size: 20px; color: #1a73e8; text-align: center; margin-bottom: 15px; }
+      .airport-section { margin-bottom: 10px; padding: 10px; background-color: #fafafa; border-left: 3px solid #1a73e8; border-radius: 4px; }
+      h2 { font-size: 16px; color: #555; margin: 0 0 5px 0; }
+      .airport-info { font-size: 14px; margin: 0 0 5px 0; }
+      .airspace { font-size: 12px; color: #777; }
+      .details { font-size: 12px; margin: 0; }
+      .distance-section { text-align: center; padding: 10px; background-color: #e8f0fe; border-radius: 4px; margin-bottom: 10px; }
+      .map-section { text-align: center; padding: 10px; background: none; }
+      h3 { font-size: 14px; color: #1a73e8; margin: 0 0 5px 0; }
+      p { margin: 3px 0; }
       a { color: #1a73e8; text-decoration: none; }
       a:hover { text-decoration: underline; }
+      #mapSnapshot { background: none; width: 600px; height: 400px; margin: 0 auto; }
+      #mapSnapshot img { width: 600px; height: 400px; display: block; margin: 0 auto; border: 1px solid #ddd; border-radius: 4px; }
     </style>
   `;
 
-  const reportWindow = window.open("", "Trip Summary", "width=650,height=650");
+  const reportWindow = window.open("", "Trip Summary", "width=650,height=700");
   reportWindow.document.write(`<html><head><title>Cross Country Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
+
+  captureMapAsPNG(homeCode, firstCode, secondCode, dataUrl => {
+    if (dataUrl) {
+      const img = reportWindow.document.createElement("img");
+      img.src = dataUrl;
+      reportWindow.document.getElementById("mapSnapshot").appendChild(img);
+    } else {
+      reportWindow.document.getElementById("mapSnapshot").innerHTML = "<p>Failed to capture map.</p>";
+    }
+  });
+
   reportWindow.document.close();
 }
 
@@ -1559,29 +1442,47 @@ function showTwoLegSummary() {
         <p>One-Way: ${dist.toFixed(1)} NM</p>
         <p>Round-Trip: ${totalDist.toFixed(1)} NM</p>
       </div>
+      <div class="map-section">
+        <h3>Map Snapshot</h3>
+        <div id="mapSnapshot"></div>
+      </div>
     </div>
   `;
 
   const styles = `
     <style>
-      body { font-family: 'Arial', sans-serif; margin: 20px; background-color: #f5f6f5; color: #333; line-height: 1.6; }
-      .summary-container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-      h1 { font-size: 24px; color: #1a73e8; text-align: center; margin-bottom: 20px; }
-      .airport-section { margin-bottom: 20px; padding: 15px; background-color: #fafafa; border-left: 4px solid #1a73e8; border-radius: 4px; }
-      h2 { font-size: 18px; color: #555; margin: 0 0 10px 0; }
-      .airport-info { font-size: 16px; margin: 0 0 10px 0; }
-      .airspace { font-size: 14px; color: #777; }
-      .details { font-size: 14px; margin: 0; }
-      .distance-section { text-align: center; padding: 15px; background-color: #e8f0fe; border-radius: 4px; }
-      h3 { font-size: 16px; color: #1a73e8; margin: 0 0 10px 0; }
-      p { margin: 5px 0; }
+      body { font-family: 'Arial', sans-serif; margin: 10px; background-color: #f5f6f5; color: #333; line-height: 1.4; }
+      .summary-container { max-width: 600px; margin: 0 auto; padding: 15px; background-color: #fff; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+      h1 { font-size: 20px; color: #1a73e8; text-align: center; margin-bottom: 15px; }
+      .airport-section { margin-bottom: 10px; padding: 10px; background-color: #fafafa; border-left: 3px solid #1a73e8; border-radius: 4px; }
+      h2 { font-size: 16px; color: #555; margin: 0 0 5px 0; }
+      .airport-info { font-size: 14px; margin: 0 0 5px 0; }
+      .airspace { font-size: 12px; color: #777; }
+      .details { font-size: 12px; margin: 0; }
+      .distance-section { text-align: center; padding: 10px; background-color: #e8f0fe; border-radius: 4px; margin-bottom: 10px; }
+      .map-section { text-align: center; padding: 10px; background: none; }
+      h3 { font-size: 14px; color: #1a73e8; margin: 0 0 5px 0; }
+      p { margin: 3px 0; }
       a { color: #1a73e8; text-decoration: none; }
       a:hover { text-decoration: underline; }
+      #mapSnapshot { background: none; width: 600px; height: 400px; margin: 0 auto; }
+      #mapSnapshot img { width: 600px; height: 400px; display: block; margin: 0 auto; border: 1px solid #ddd; border-radius: 4px; }
     </style>
   `;
 
-  const reportWindow = window.open("", "Trip Summary", "width=650,height=450");
+  const reportWindow = window.open("", "Trip Summary", "width=650,height=550");
   reportWindow.document.write(`<html><head><title>Cross Country Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
+
+  captureMapAsPNG(homeCode, destCode, null, dataUrl => {
+    if (dataUrl) {
+      const img = reportWindow.document.createElement("img");
+      img.src = dataUrl;
+      reportWindow.document.getElementById("mapSnapshot").appendChild(img);
+    } else {
+      reportWindow.document.getElementById("mapSnapshot").innerHTML = "<p>Failed to capture map.</p>";
+    }
+  });
+
   reportWindow.document.close();
 }
 
@@ -1766,6 +1667,70 @@ function resetSecondLeg() {
 
   // Note: Do NOT remove legLine here to preserve first-leg visualization
   console.log("Second-leg state reset, first-leg preserved.");
+}
+
+function captureMapAsPNG(homeCode, firstCode, secondCode, callback) {
+  const mapElement = document.getElementById("map");
+
+  // Close all open popups
+  map.closePopup();
+
+  // Define bounds based on selected airports
+  const home = airportData[homeCode];
+  const first = airportData[firstCode];
+  const bounds = [
+    [home.lat, home.lon],
+    [first.lat, first.lon]
+  ];
+
+  if (secondCode && airportData[secondCode]) {
+    const second = airportData[secondCode];
+    bounds.push([second.lat, second.lon]);
+  }
+
+  // Fit map to bounds with more padding for wider view
+  map.fitBounds(bounds, {
+    padding: [100, 100], // Increased padding for more context
+    maxZoom: 8          // Reduced max zoom for broader view
+  });
+
+  // Store original styles
+  const originalWidth = mapElement.style.width;
+  const originalHeight = mapElement.style.height;
+  const originalBackground = mapElement.style.backgroundColor;
+
+  // Set map size to match capture size and ensure white background
+  mapElement.style.width = "600px";
+  mapElement.style.height = "400px";
+  mapElement.style.backgroundColor = "#ffffff";
+
+  // Force redraw with new size
+  map.invalidateSize();
+
+  setTimeout(() => {
+    domtoimage.toPng(mapElement, {
+      bgcolor: "#ffffff",
+      quality: 1,
+      width: 600,        // Fixed width
+      height: 400        // Fixed height
+    }).then(dataUrl => {
+      console.log("Map captured as PNG");
+      // Restore original styles
+      mapElement.style.width = originalWidth;
+      mapElement.style.height = originalHeight;
+      mapElement.style.backgroundColor = originalBackground;
+      map.invalidateSize(); // Redraw map to original size
+      callback(dataUrl);
+    }).catch(err => {
+      console.error("Error capturing map:", err);
+      // Restore original styles on error
+      mapElement.style.width = originalWidth;
+      mapElement.style.height = originalHeight;
+      mapElement.style.backgroundColor = originalBackground;
+      map.invalidateSize();
+      callback(null);
+    });
+  }, 300); // Increased delay to ensure zoom and resize settle
 }
 
 function showCredits() {
