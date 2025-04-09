@@ -19,8 +19,9 @@
 <body>
   <div class="container">
     <div class="left-panel">
-      <h1 id="titleHeading" class="title-heading" title="Click for credits">🛫 Cross Country Trip Planner</h1>
+      <h1 id="titleHeading" class="title-heading" title="Click for credits">🛫 Cross Country Flight Planner <span class="versionNumber"></span></h1>
       <div class="control-section">
+      <hr>
         <h2>Home Base Airport</h2>
         <section>
           <label>Country: <select id="countrySelect"></select></label>
@@ -50,8 +51,18 @@
               <label><input type="checkbox" class="airspace" value="G" checked> Class G</label>
             </div>
           </div>
+          <div class="filter-group">
+            <strong>Instrument Approaches:</strong><br>
+            <div class="checkbox-group">
+              <label><input type="checkbox" class="approach" value="RNAV" checked> RNAV</label>
+              <label><input type="checkbox" class="approach" value="ILS/LOC" checked> ILS/LOC</label>
+              <label><input type="checkbox" class="approach" value="VOR/NDB" checked> VOR/NDB</label>
+              <label><input type="checkbox" class="approach" value="None"> None</label>
+            </div>
+          </div>
+
           <div class="slider-container">
-            <label>Minimum Runway Length (ft):
+            <label><strong>Minimum Runway Length:</strong>
               <input type="range" id="minRunwayLength" min="500" max="15000" step="100" value="3000" oninput="updateLabel('runwayLabel', this.value)">
               <span id="runwayLabel">3000</span> ft
             </label>
