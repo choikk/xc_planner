@@ -1,6 +1,6 @@
-let APP_VERSION = "v1.2.2"; // or whatever you like
+let APP_VERSION = "v1.3"; // or whatever you like
 let FILE_DATE = new Date(document.lastModified).toISOString().split("T")[0];
-let DATABASE_VERSION = "20_MAR_2025"; // default fallback
+let DATABASE_VERSION = "UNKNOWN"; // default fallback
 
 let airportData = {};
 
@@ -100,7 +100,6 @@ async function loadData() {
     console.log(`Country selected: ${selectedCountry}`);
     const states = [...statesByCountry[selectedCountry]].sort();
 
-    // Handle state dropdown
     if (selectedCountry !== "US" && states.length === 1 && states[0] === "unknown") {
       document.getElementById("stateSelect").innerHTML = '<option value="unknown">N/A</option>';
       document.getElementById("stateSelect").disabled = true;
@@ -111,7 +110,6 @@ async function loadData() {
     document.getElementById("airportSelect").innerHTML = "";
     document.getElementById("homeBaseInfo").innerHTML = "";
 
-    // Ensure first state is selected and triggers airport population
     if (states.length > 0) {
       const stateSelect = document.getElementById("stateSelect");
       stateSelect.value = states[0];
@@ -120,13 +118,22 @@ async function loadData() {
       const airports = airportsByState[key] || [];
       console.log(`Airports for ${key}: ${airports.length}`);
 
-      // Populate airports immediately
       populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
       if (airports.length > 0) {
         const airportSelect = document.getElementById("airportSelect");
         airportSelect.value = airports[0].code;
         console.log(`Auto-selecting airport: ${airports[0].code}`);
-        airportSelect.dispatchEvent(new Event("change"));
+        // Only update map and info, do not trigger search
+        const ap = airportData[airports[0].code];
+        document.getElementById("homeBaseInfo").innerHTML = `
+          <strong>${ap.code} - ${ap.airport_name}</strong><br>
+          ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
+          Airspace: ${ap.airspace}<br>
+          <strong>Runways:</strong><br>
+          ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
+        `;
+        updateMap(ap.lat, ap.lon, `${ap.code} - ${ap.airport_name}`);
+        map.setView([ap.lat, ap.lon], 7);
       } else {
         document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
       }
@@ -146,14 +153,25 @@ async function loadData() {
       const airportSelect = document.getElementById("airportSelect");
       airportSelect.value = airports[0].code;
       console.log(`Auto-selecting airport: ${airports[0].code}`);
-      airportSelect.dispatchEvent(new Event("change"));
+      // Only update map and info, do not trigger search
+      const ap = airportData[airports[0].code];
+      document.getElementById("homeBaseInfo").innerHTML = `
+        <strong>${ap.code} - ${ap.airport_name}</strong><br>
+        ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
+        Airspace: ${ap.airspace}<br>
+        <strong>Runways:</strong><br>
+        ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
+      `;
+      updateMap(ap.lat, ap.lon, `${ap.code} - ${ap.airport_name}`);
+      map.setView([ap.lat, ap.lon], 6);
     } else {
       document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
     }
   });
 
-  document.getElementById("airportSelect").addEventListener("change", () => {
-    const code = document.getElementById("airportSelect").value;
+  const airportSelect = document.getElementById("airportSelect");
+  airportSelect.addEventListener("change", () => {
+    const code = airportSelect.value;
     console.log(`Airport selected: ${code}`);
     const ap = airportData[code];
     if (!ap) return;
@@ -166,11 +184,14 @@ async function loadData() {
     `;
     updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
     resetTripState();
+    map.setView([ap.lat, ap.lon], 6);
+    // Removed findDestinations() from here; it will only run on button click
   });
 
-  // Default selection
+  // Set initial values but don’t trigger search
   document.getElementById("countrySelect").value = "US";
-  document.getElementById("countrySelect").dispatchEvent(new Event("change"));
+  const initialCountryEvent = new Event("change");
+  document.getElementById("countrySelect").dispatchEvent(initialCountryEvent);
 }
 
 function initMap() {
@@ -386,6 +407,7 @@ function findDestinations() {
   const base = airportData[homeCode];
   const selectedSurfaces = [...document.querySelectorAll(".surface:checked")].map(el => el.value);
   const selectedAirspaces = [...document.querySelectorAll(".airspace:checked")].map(el => el.value);
+  const selectedApproaches = [...document.querySelectorAll(".approach:checked")].map(el => el.value); // Includes "None" if checked
   const minRunwayLength = parseInt(document.getElementById("minRunwayLength").value);
   const firstLegMin = parseInt(document.getElementById("firstLegMin").value);
   const firstLegMax = parseInt(document.getElementById("firstLegMax").value);
@@ -397,8 +419,8 @@ function findDestinations() {
   
   for (const [code, airport] of Object.entries(airportData)) {
     if (code === homeCode) continue;
-    if (!selectedAirspaces.includes(airport.airspace)) continue;
-  
+    if (!selectedAirspaces.includes(airport.airspace)) continue; // OR logic for airspace
+    
     const eligibleRunways = airport.runways.filter(rwy => {
       const len = parseInt(rwy.length) || 0;
       const surface = (rwy.surface || "").split("-")[0].toUpperCase();
@@ -407,8 +429,38 @@ function findDestinations() {
          (selectedSurfaces.includes("OTHER") &&
           !["ASPH", "CONC", "TURF"].includes(surface)));
     });
-
     if (eligibleRunways.length === 0) continue;
+
+    // Filter by instrument approaches with OR logic
+    if (selectedApproaches.length > 0) {
+      const hasApproachesField = 'approaches' in airport;
+      const isEmptyApproaches = hasApproachesField && Array.isArray(airport.approaches) && airport.approaches.length === 0;
+      const hasApproaches = hasApproachesField && Array.isArray(airport.approaches) && airport.approaches.length > 0;
+
+      let matchesAnyApproach = false;
+      if (hasApproaches) {
+        matchesAnyApproach = selectedApproaches.some(approach => {
+          if (approach === "RNAV") {
+            return airport.approaches.some(ap => ap.name.toUpperCase().includes("RNAV"));
+          }
+          if (approach === "ILS/LOC") {
+            return airport.approaches.some(ap => 
+              ap.name.toUpperCase().includes("ILS") || ap.name.toUpperCase().includes("LOC")
+            );
+          }
+          if (approach === "VOR/NDB") {
+            return airport.approaches.some(ap => 
+              ap.name.toUpperCase().includes("VOR") || ap.name.toUpperCase().includes("NDB")
+            );
+          }
+          return false;
+        });
+      }
+      const matchesNone = isEmptyApproaches && selectedApproaches.includes("None");
+
+      // OR logic: include if it matches any selected condition
+      if (!matchesAnyApproach && !matchesNone) continue;
+    }
 
     const dist = haversine(base.lat, base.lon, airport.lat, airport.lon);
     if (dist < firstLegMin || dist > firstLegMax) continue;
@@ -442,12 +494,17 @@ function displayResults(results, selectedCode = null) {
 
   let html = `<p>✅ ${results.length} destination(s) found:</p><ul class="result-list">`;
   results.forEach((r) => {
-    const isChecked = r.code === selectedCode ? "checked" : ""; // Preserve selection
+    const isChecked = r.code === selectedCode ? "checked" : "";
+    const ap = airportData[r.code];
+    const approaches = ap.approaches && ap.approaches.length > 0 
+      ? ap.approaches.map(ap => ap.name).join(", ") 
+      : "None";
     html += `
       <li>
         <label style="font-size: 1.0em;">
           <input type="radio" name="firstLeg" value="${r.code}" ${isChecked}>
           <strong>${r.code}</strong> (${r.distance} NM) – ${r.name}, ${r.city}, ${r.state} 
+          | Airspace: ${ap.airspace} | Approaches: ${approaches}
         </label>
       </li>
     `;
@@ -474,22 +531,42 @@ function displayResults(results, selectedCode = null) {
     marker.airportCode = r.code;
     destinationMarkers.push(marker);
 
-    marker.bindPopup(() => {
-      const popupContent = L.DomUtil.create("div");
-      popupContent.innerHTML = `
+    // Combine runways and approaches
+    let runwaysAndApproaches = ap.runways.map(rwy => 
+      `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+    ).join("<br>");
+    if (ap.approaches && ap.approaches.length > 0) {
+      runwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+        ap.approaches.map(ap => 
+          `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+        ).join("<br>");
+    } else {
+      runwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+    }
+
+    marker.bindPopup(`
+      <div>
         <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
         ${ap.airport_name}<br>
         Total: ${(r.distance * 2).toFixed(1)} NM<br><br>
-        <u>Runways</u><br>
-        ${ap.runways.map(rwy => `
-          <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
-        `).join("<br>")}
-        <button class="summary-btn">📋 Summary Report</button>
-      `;
-      const btn = popupContent.querySelector(".summary-btn");
-      btn.addEventListener("click", () => showTwoLegSummary());
-      return popupContent;
-    });
+        <strong>Runways</strong>:<br>${runwaysAndApproaches || "No runway data available"}<br>
+        <button onclick="showTwoLegSummary()">📋 Summary Report</button>
+      </div>
+    `);
+
+//    marker.bindPopup(() => {
+//      const popupContent = L.DomUtil.create("div");
+//      popupContent.innerHTML = `
+//        <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
+//        ${ap.airport_name}<br>
+//        Total: ${(r.distance * 2).toFixed(1)} NM<br><br>
+//        <strong>Runways</strong>:<br>${runwaysAndApproaches}<br>
+//        <button class="summary-btn">📋 Summary Report</button>
+//      `;
+//      const btn = popupContent.querySelector(".summary-btn");
+//      btn.addEventListener("click", () => showTwoLegSummary());
+//      return popupContent;
+//    });
 
     marker.on("click", () => {
       const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
@@ -514,6 +591,11 @@ function displayResults(results, selectedCode = null) {
         highlightAirport(code);
         drawSecondLegEllipses();
         findSecondLeg();
+        // Open popup for the selected first destination in triangle mode
+        const marker = destinationMarkers.find(m => m.airportCode === code);
+        if (marker) {
+          marker.openPopup();
+        }
       });
     });
   } else {
@@ -523,6 +605,14 @@ function displayResults(results, selectedCode = null) {
         highlightAirport(code);
       });
     });
+  }
+
+  // Open popup for pre-selected destination (if any) in triangle mode
+  if (tripType === "two" && selectedCode) {
+    const marker = destinationMarkers.find(m => m.airportCode === selectedCode);
+    if (marker) {
+      marker.openPopup();
+    }
   }
 
   // Update UI for second-leg button
@@ -553,11 +643,11 @@ function findSecondLeg() {
   const totalMin = parseInt(document.getElementById("totalLegMin").value);
   const totalMax = parseInt(document.getElementById("totalLegMax").value);
   
-    
   const baseToFirst = haversine(base.lat, base.lon, first.lat, first.lon);
     
   const selectedSurfaces = [...document.querySelectorAll(".surface:checked")].map(el => el.value);
   const selectedAirspaces = [...document.querySelectorAll(".airspace:checked")].map(el => el.value);
+  const selectedApproaches = [...document.querySelectorAll(".approach:checked")].map(el => el.value); // Includes "None" if checked
   const minRunwayLength = parseInt(document.getElementById("minRunwayLength").value);
   
   const secondLegResults = [];
@@ -565,7 +655,7 @@ function findSecondLeg() {
   for (const [code, airport] of Object.entries(airportData)) {
     if (code === baseCode || code === firstLegCode) continue;
     
-    if (!selectedAirspaces.includes(airport.airspace)) continue;
+    if (!selectedAirspaces.includes(airport.airspace)) continue; // OR logic for airspace
       
     const eligibleRunways = airport.runways.filter(rwy => {
       const len = parseInt(rwy.length) || 0;
@@ -576,6 +666,37 @@ function findSecondLeg() {
           !["ASPH", "CONC", "TURF"].includes(surface)));
     });
     if (eligibleRunways.length === 0) continue;
+
+    // Filter by instrument approaches with OR logic
+    if (selectedApproaches.length > 0) {
+      const hasApproachesField = 'approaches' in airport;
+      const isEmptyApproaches = hasApproachesField && Array.isArray(airport.approaches) && airport.approaches.length === 0;
+      const hasApproaches = hasApproachesField && Array.isArray(airport.approaches) && airport.approaches.length > 0;
+
+      let matchesAnyApproach = false;
+      if (hasApproaches) {
+        matchesAnyApproach = selectedApproaches.some(approach => {
+          if (approach === "RNAV") {
+            return airport.approaches.some(ap => ap.name.toUpperCase().includes("RNAV"));
+          }
+          if (approach === "ILS/LOC") {
+            return airport.approaches.some(ap => 
+              ap.name.toUpperCase().includes("ILS") || ap.name.toUpperCase().includes("LOC")
+            );
+          }
+          if (approach === "VOR/NDB") {
+            return airport.approaches.some(ap => 
+              ap.name.toUpperCase().includes("VOR") || ap.name.toUpperCase().includes("NDB")
+            );
+          }
+          return false;
+        });
+      }
+      const matchesNone = isEmptyApproaches && selectedApproaches.includes("None");
+
+      // OR logic: include if it matches any selected condition
+      if (!matchesAnyApproach && !matchesNone) continue;
+    }
 
     const firstToSecond = haversine(first.lat, first.lon, airport.lat, airport.lon);
     const secondToBase = haversine(airport.lat, airport.lon, base.lat, base.lon);
@@ -646,12 +767,17 @@ function displaySecondLegResults(results, selectedCode = null) {
   let html = `<h3>Second Leg Destinations</h3>`;
   html += `<p>✅ ${results.length} second-leg destination(s) found:</p><ul class="result-list">`;
   results.forEach((r) => {
-    const isChecked = r.code === selectedCode ? "checked" : ""; // Preserve selection
+    const isChecked = r.code === selectedCode ? "checked" : "";
+    const ap = airportData[r.code];
+    const approaches = ap.approaches && ap.approaches.length > 0 
+      ? ap.approaches.map(ap => ap.name).join(", ") 
+      : "None";
     html += `
       <li>
         <label style="font-size: 1.0em;">
           <input type="radio" name="secondLeg" value="${r.code}" ${isChecked} onchange="drawTriangle('${r.fromCode}', '${r.code}', '${r.homeCode}')">
           <strong>${r.code}</strong> (${r.totalDistance} NM) – ${r.name}, ${r.city}, ${r.state}
+          | Airspace: ${r.airspace} | Approaches: ${approaches}
         </label>
       </li>
     `;
@@ -672,6 +798,19 @@ function displaySecondLegResults(results, selectedCode = null) {
     const ap = airportData[r.code];
     const color = getAirspaceColor(ap.airspace);
 
+    // Combine runways and approaches
+    let runwaysAndApproaches = ap.runways.map(rwy => 
+      `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+    ).join("<br>");
+    if (ap.approaches && ap.approaches.length > 0) {
+      runwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+        ap.approaches.map(ap => 
+          `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+        ).join("<br>");
+    } else {
+      runwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+    }
+
     const marker = L.marker([ap.lat, ap.lon], {
       representedBy: 'secondLegMarkers',
       icon: squareMarker(color)
@@ -686,12 +825,9 @@ function displaySecondLegResults(results, selectedCode = null) {
             airportData[r.fromCode].lon
         ).toFixed(1)} NM<br>
         2nd Leg: ${r.leg2Distance} NM<br>
-        Return : ${r.leg3Distance} NM<br>
-        Total  : ${r.totalDistance} NM<br><br>
-        <u>Runways</u><br>
-        ${ap.runways.map(rwy => `
-         <strong>${rwy.rwy_id}</strong>: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})
-        `).join("<br>")}
+        Return: ${r.leg3Distance} NM<br>
+        Total: ${r.totalDistance} NM<br>
+        <strong>Runways</strong>:<br>${runwaysAndApproaches}<br>
         <button onclick="showTripSummary()">📋 Summary Report</button>
       `);
 
@@ -1094,7 +1230,7 @@ function showTripSummary() {
   const secondCode = document.querySelector('input[name="secondLeg"]:checked')?.value;
 
   if (!homeCode || !firstCode || !secondCode) {
-    alert("Please select all three airports to generate a summary.");
+    alert("Please select Home Base, First Leg, and Second Leg airports.");
     return;
   }
 
@@ -1102,116 +1238,178 @@ function showTripSummary() {
   const first = airportData[firstCode];
   const second = airportData[secondCode];
 
-  const getRunways = (ap) => {
-    return ap.runways.map(r =>
-      `    • ${r.rwy_id}: ${r.length}' x ${r.width}' ${formatSurface(r.surface)} (${r.condition})`
-    ).join("\n");
-  };
+  const leg1 = haversine(home.lat, home.lon, first.lat, first.lon);
+  const leg2 = haversine(first.lat, first.lon, second.lat, second.lon);
+  const leg3 = haversine(second.lat, second.lon, home.lat, home.lon);
+  const totalDist = leg1 + leg2 + leg3;
 
-  const leg1 = haversine(home.lat, home.lon, first.lat, first.lon).toFixed(1);
-  const leg2 = haversine(first.lat, first.lon, second.lat, second.lon).toFixed(1);
-  const leg3 = haversine(second.lat, second.lon, home.lat, home.lon).toFixed(1);
-  const total = (parseFloat(leg1) + parseFloat(leg2) + parseFloat(leg3)).toFixed(1);
+  let homeRunwaysAndApproaches = home.runways.map(rwy => 
+    `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+  ).join("<br>") || "No runway data";
+  if (home.approaches && home.approaches.length > 0) {
+    homeRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+      home.approaches.map(ap => 
+        `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+      ).join("<br>");
+  } else {
+    homeRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+  }
 
-// Fixed-width formatting for trip legs
-  const codeWidth = 4; // Max width for airport codes (e.g., "KJFK" = 4, pad to 6)
-  const distanceWidth = 6; // Max width for distance (e.g., "123.4" = 5, pad to 6)
+  let firstRunwaysAndApproaches = first.runways.map(rwy => 
+    `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+  ).join("<br>") || "No runway data";
+  if (first.approaches && first.approaches.length > 0) {
+    firstRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+      first.approaches.map(ap => 
+        `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+      ).join("<br>");
+  } else {
+    firstRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+  }
 
-  const leg1Line = `${homeCode.padEnd(codeWidth)} ➝ ${firstCode.padEnd(codeWidth)}  : ${leg1.padStart(distanceWidth)} NM`;
-  const leg2Line = `${firstCode.padEnd(codeWidth)} ➝ ${secondCode.padEnd(codeWidth)}  : ${leg2.padStart(distanceWidth)} NM`;
-  const leg3Line = `${secondCode.padEnd(codeWidth)} ➝ ${homeCode.padEnd(codeWidth)}  : ${leg3.padStart(distanceWidth)} NM`;
+  let secondRunwaysAndApproaches = second.runways.map(rwy => 
+    `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+  ).join("<br>") || "No runway data";
+  if (second.approaches && second.approaches.length > 0) {
+    secondRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+      second.approaches.map(ap => 
+        `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+      ).join("<br>");
+  } else {
+    secondRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+  }
+
   const summary = `
-🛫 Airports
+    <div class="summary-container">
+      <h1>🛫 Triangle Trip Summary</h1>
+      <div class="airport-section">
+        <h2>Home Base: ${homeCode}</h2>
+        <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state} <span class="airspace">(Class ${home.airspace})</span></p>
+        <p class="details"><strong>Runways & Approaches:</strong><br>${homeRunwaysAndApproaches}</p>
+      </div>
+      <div class="airport-section">
+        <h2>First Destination: ${firstCode}</h2>
+        <p class="airport-info">${first.airport_name}, ${first.city}, ${first.state} <span class="airspace">(Class ${first.airspace})</span></p>
+        <p class="details"><strong>Runways & Approaches:</strong><br>${firstRunwaysAndApproaches}</p>
+      </div>
+      <div class="airport-section">
+        <h2>Second Destination: ${secondCode}</h2>
+        <p class="airport-info">${second.airport_name}, ${second.city}, ${second.state} <span class="airspace">(Class ${second.airspace})</span></p>
+        <p class="details"><strong>Runways & Approaches:</strong><br>${secondRunwaysAndApproaches}</p>
+      </div>
+      <div class="distance-section">
+        <h3>📏 Trip Distances</h3>
+        <p>${homeCode} ➝ ${firstCode}: ${leg1.toFixed(1)} NM</p>
+        <p>${firstCode} ➝ ${secondCode}: ${leg2.toFixed(1)} NM</p>
+        <p>${secondCode} ➝ ${homeCode}: ${leg3.toFixed(1)} NM</p>
+        <p><strong>Total Distance:</strong> ${totalDist.toFixed(1)} NM</p>
+      </div>
+    </div>
+  `;
 
-Departure:
-  Airport ID   : ${homeCode}
-  Airspace     : Class ${home.airspace}
-  Name         : ${home.airport_name}
-  Runways      :
-${getRunways(home)}
+  const styles = `
+    <style>
+      body { font-family: 'Arial', sans-serif; margin: 20px; background-color: #f5f6f5; color: #333; line-height: 1.6; }
+      .summary-container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+      h1 { font-size: 24px; color: #1a73e8; text-align: center; margin-bottom: 20px; }
+      .airport-section { margin-bottom: 20px; padding: 15px; background-color: #fafafa; border-left: 4px solid #1a73e8; border-radius: 4px; }
+      h2 { font-size: 18px; color: #555; margin: 0 0 10px 0; }
+      .airport-info { font-size: 16px; margin: 0 0 10px 0; }
+      .airspace { font-size: 14px; color: #777; }
+      .details { font-size: 14px; margin: 0; }
+      .distance-section { text-align: center; padding: 15px; background-color: #e8f0fe; border-radius: 4px; }
+      h3 { font-size: 16px; color: #1a73e8; margin: 0 0 10px 0; }
+      p { margin: 5px 0; }
+      a { color: #1a73e8; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  `;
 
-1st Destination:
-  Airport ID   : ${firstCode}
-  Airspace     : Class ${first.airspace}
-  Name         : ${first.airport_name}
-  Runways      :
-${getRunways(first)}
-
-2nd Destination:
-  Airport ID   : ${secondCode}
-  Airspace     : Class ${second.airspace}
-  Name         : ${second.airport_name}
-  Runways      :
-${getRunways(second)}
-
-📏 Trip Summary
-
-  ${leg1Line}
-  ${leg2Line}
-  ${leg3Line}
-
-  Total Distance: ${total} NM
-  `.trim();
-
-  document.getElementById("summaryContent").textContent = summary;
-  document.getElementById("summaryModal").style.display = "block";
+  const reportWindow = window.open("", "Trip Summary", "width=650,height=650");
+  reportWindow.document.write(`<html><head><title>Triangle Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
+  reportWindow.document.close();
 }
 
 function showTwoLegSummary() {
   const homeCode = document.getElementById("airportSelect").value;
-  const firstCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
+  const destCode = document.querySelector('input[name="firstLeg"]:checked')?.value;
 
-  if (!homeCode || !firstCode) {
-    alert("Please select a departure and destination.");
+  if (!homeCode || !destCode) {
+    alert("Please select both a Home Base Airport and a First Leg Destination.");
     return;
   }
 
   const home = airportData[homeCode];
-  const dest = airportData[firstCode];
+  const dest = airportData[destCode];
+  const dist = haversine(home.lat, home.lon, dest.lat, dest.lon);
+  const totalDist = dist * 2;
 
-  const getRunways = (ap) => {
-    return ap.runways.map(r =>
-      `    • ${r.rwy_id}: ${r.length}' x ${r.width}' ${formatSurface(r.surface)} (${r.condition})`
-    ).join("\n");
-  };
+  let homeRunwaysAndApproaches = home.runways.map(rwy => 
+    `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+  ).join("<br>") || "No runway data";
+  if (home.approaches && home.approaches.length > 0) {
+    homeRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+      home.approaches.map(ap => 
+        `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+      ).join("<br>");
+  } else {
+    homeRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+  }
 
-  const legOut = haversine(home.lat, home.lon, dest.lat, dest.lon).toFixed(1);
-  const legBack = legOut; // symmetrical round trip
-  const total = (parseFloat(legOut) * 2).toFixed(1);
-
-// Fixed-width formatting for trip legs
-  const codeWidth = 4; // Max width for airport codes (e.g., "KJFK" = 4, pad to 6)
-  const distanceWidth = 6; // Max width for distance (e.g., "123.4" = 5, pad to 6)
-  const leg1Line = `${homeCode.padEnd(codeWidth)} ➝ ${firstCode.padEnd(codeWidth)}  : ${legOut.padStart(distanceWidth)} NM`;
-  const leg2Line = `${firstCode.padEnd(codeWidth)} ➝ ${homeCode.padEnd(codeWidth)}  : ${legBack.padStart(distanceWidth)} NM`;
+  let destRunwaysAndApproaches = dest.runways.map(rwy => 
+    `• ${rwy.rwy_id}: ${rwy.length}' x ${rwy.width}' ${formatSurface(rwy.surface)} (${rwy.condition})`
+  ).join("<br>") || "No runway data";
+  if (dest.approaches && dest.approaches.length > 0) {
+    destRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>" + 
+      dest.approaches.map(ap => 
+        `• <a href="${ap.pdf_url}" target="_blank">${ap.name}</a>`
+      ).join("<br>");
+  } else {
+    destRunwaysAndApproaches += "<br><br><strong>Instrument Approaches:</strong><br>• None";
+  }
 
   const summary = `
-🛫 Airports
+    <div class="summary-container">
+      <h1>🛫 Cross Country Trip Summary</h1>
+      <div class="airport-section">
+        <h2>Home Base: ${homeCode}</h2>
+        <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state} <span class="airspace">(Class ${home.airspace})</span></p>
+        <p class="details"><strong>Runways & Approaches:</strong><br>${homeRunwaysAndApproaches}</p>
+      </div>
+      <div class="airport-section">
+        <h2>Destination: ${destCode}</h2>
+        <p class="airport-info">${dest.airport_name}, ${dest.city}, ${dest.state} <span class="airspace">(Class ${dest.airspace})</span></p>
+        <p class="details"><strong>Runways & Approaches:</strong><br>${destRunwaysAndApproaches}</p>
+      </div>
+      <div class="distance-section">
+        <h3>📏 Trip Distances</h3>
+        <p>One-Way: ${dist.toFixed(1)} NM</p>
+        <p>Round-Trip: ${totalDist.toFixed(1)} NM</p>
+      </div>
+    </div>
+  `;
 
-Departure:
-  Airport ID   : ${homeCode}
-  Airspace     : Class ${home.airspace}
-  Name         : ${home.airport_name}
-  Runways      :
-${getRunways(home)}
+  const styles = `
+    <style>
+      body { font-family: 'Arial', sans-serif; margin: 20px; background-color: #f5f6f5; color: #333; line-height: 1.6; }
+      .summary-container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+      h1 { font-size: 24px; color: #1a73e8; text-align: center; margin-bottom: 20px; }
+      .airport-section { margin-bottom: 20px; padding: 15px; background-color: #fafafa; border-left: 4px solid #1a73e8; border-radius: 4px; }
+      h2 { font-size: 18px; color: #555; margin: 0 0 10px 0; }
+      .airport-info { font-size: 16px; margin: 0 0 10px 0; }
+      .airspace { font-size: 14px; color: #777; }
+      .details { font-size: 14px; margin: 0; }
+      .distance-section { text-align: center; padding: 15px; background-color: #e8f0fe; border-radius: 4px; }
+      h3 { font-size: 16px; color: #1a73e8; margin: 0 0 10px 0; }
+      p { margin: 5px 0; }
+      a { color: #1a73e8; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  `;
 
-Destination:
-  Airport ID   : ${firstCode}
-  Airspace     : Class ${dest.airspace}
-  Name         : ${dest.airport_name}
-  Runways      :
-${getRunways(dest)}
-
-📏 Trip Summary
-
-  ${leg1Line}
-  ${leg2Line}
-
-  Total Distance: ${total} NM
-`.trim();
-
-  document.getElementById("summaryContent").textContent = summary;
-  document.getElementById("summaryModal").style.display = "block";
+  const reportWindow = window.open("", "Trip Summary", "width=650,height=450");
+  reportWindow.document.write(`<html><head><title>Cross Country Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
+  reportWindow.document.close();
 }
 
 function computeEllipsePoints(focusA, focusB, semiMajorNm, numPoints = 180) {
@@ -1410,55 +1608,61 @@ Built with 💻 + 🛩️  with lots of ❤️🩵
 }
 
 window.onload = () => {
-    initMap();
-    loadData();
+  initMap();
+  loadData();
 
-    // First Leg Slider
-    const firstMin = document.getElementById("firstLegMin");
-    const firstMax = document.getElementById("firstLegMax");
-    const firstMinValue = document.getElementById("firstLegMinValue");
-    const firstMaxValue = document.getElementById("firstLegMaxValue");
-    const firstMinInput = document.getElementById("firstLegMinInput");
-    const firstMaxInput = document.getElementById("firstLegMaxInput");
+  const firstMin = document.getElementById("firstLegMin");
+  const firstMax = document.getElementById("firstLegMax");
+  const firstMinValue = document.getElementById("firstLegMinValue");
+  const firstMaxValue = document.getElementById("firstLegMaxValue");
+  const firstMinInput = document.getElementById("firstLegMinInput");
+  const firstMaxInput = document.getElementById("firstLegMaxInput");
 
-    updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles);
+  updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles);
 
-    firstMin.addEventListener("input", () => updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles));
-    firstMax.addEventListener("input", () => updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles));
-    firstMinInput.addEventListener("input", () => syncSliderFromInput(firstMin, firstMax, firstMinInput, firstMaxInput, refreshDistanceCircles));
-    firstMaxInput.addEventListener("input", () => syncSliderFromInput(firstMin, firstMax, firstMinInput, firstMaxInput, refreshDistanceCircles));
+  firstMin.addEventListener("input", () => updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles));
+  firstMax.addEventListener("input", () => updateDualSlider(firstMin, firstMax, firstMinValue, firstMaxValue, firstMinInput, firstMaxInput, refreshDistanceCircles));
+  firstMinInput.addEventListener("input", () => syncSliderFromInput(firstMin, firstMax, firstMinInput, firstMaxInput, refreshDistanceCircles));
+  firstMaxInput.addEventListener("input", () => syncSliderFromInput(firstMin, firstMax, firstMinInput, firstMaxInput, refreshDistanceCircles));
 
-    // Total Leg Slider
-    const totalMin = document.getElementById("totalLegMin");
-    const totalMax = document.getElementById("totalLegMax");
-    const totalMinValue = document.getElementById("totalLegMinValue");
-    const totalMaxValue = document.getElementById("totalLegMaxValue");
-    const totalMinInput = document.getElementById("totalLegMinInput");
-    const totalMaxInput = document.getElementById("totalLegMaxInput");
+  const totalMin = document.getElementById("totalLegMin");
+  const totalMax = document.getElementById("totalLegMax");
+  const totalMinValue = document.getElementById("totalLegMinValue");
+  const totalMaxValue = document.getElementById("totalLegMaxValue");
+  const totalMinInput = document.getElementById("totalLegMinInput");
+  const totalMaxInput = document.getElementById("totalLegMaxInput");
 
-    updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses);
+  updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses);
 
-    totalMin.addEventListener("input", () => updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses));
-    totalMax.addEventListener("input", () => updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses));
-    totalMinInput.addEventListener("input", () => syncSliderFromInput(totalMin, totalMax, totalMinInput, totalMaxInput, drawSecondLegEllipses));
-    totalMaxInput.addEventListener("input", () => syncSliderFromInput(totalMin, totalMax, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+  totalMin.addEventListener("input", () => updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+  totalMax.addEventListener("input", () => updateDualSlider(totalMin, totalMax, totalMinValue, totalMaxValue, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+  totalMinInput.addEventListener("input", () => syncSliderFromInput(totalMin, totalMax, totalMinInput, totalMaxInput, drawSecondLegEllipses));
+  totalMaxInput.addEventListener("input", () => syncSliderFromInput(totalMin, totalMax, totalMinInput, totalMaxInput, drawSecondLegEllipses));
 
-// Enforce total leg constraint on load
-    updateTotalLegConstraints();
+  updateTotalLegConstraints();
 };
 
 window.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("firstLegMin").addEventListener("input", () => {
-        updateTotalLegConstraints();
-    });
-    document.getElementById("firstLegMinInput").addEventListener("change", () => {
-        updateTotalLegConstraints();
-    });
-    document.getElementById("titleHeading").addEventListener("click", async () => {
-        await loadDatabaseVersion();
-        showCredits();
-    });
+  const versionSpan = document.querySelector(".versionNumber");
+  if (versionSpan) {
+    versionSpan.textContent = APP_VERSION; // "v1.3"
+    console.log("Version number set to:", APP_VERSION); // Debug
+  } else {
+    console.error("Could not find .versionNumber element"); // Debug
+  }
+
+  document.getElementById("firstLegMin").addEventListener("input", () => {
+    updateTotalLegConstraints();
+  });
+  document.getElementById("firstLegMinInput").addEventListener("change", () => {
+    updateTotalLegConstraints();
+  });
+  document.getElementById("titleHeading").addEventListener("click", async () => {
+    await loadDatabaseVersion();
+    showCredits();
+  });
 });
+
 
 document.querySelectorAll('input[name="tripType"]').forEach(radio => {
   radio.addEventListener("change", resetTripState);

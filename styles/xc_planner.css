@@ -290,3 +290,11 @@ section > div > strong {
     white-space: pre-wrap;
     font-family: monospace;
 }
+
+.versionNumber {
+    font-size: 14px;
+    color: #777;
+    margin-left: 0px;
+    position: relative;
+    top: 0px;
+}
