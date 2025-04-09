@@ -123,9 +123,11 @@ async function loadData() {
       populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
       if (airports.length > 0) {
         const airportSelect = document.getElementById("airportSelect");
-        airportSelect.value = airports[0].code;
-        console.log(`Auto-selecting airport: ${airports[0].code}`);
-        const ap = airportData[airports[0].code];
+        const code = airports[0].code; // Explicitly set code
+        airportSelect.value = code;    // Set the dropdown value
+        const ap = airportData[code];
+        console.log(`Auto-selecting airport: ${code}`);
+
         document.getElementById("homeBaseInfo").innerHTML = `
           <strong>${ap.code} - ${ap.airport_name}</strong><br>
           ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
@@ -133,7 +135,7 @@ async function loadData() {
           <strong>Runways:</strong><br>
           ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
         `;
-        updateMap(ap.lat, ap.lon, `${ap.code} - ${ap.airport_name}`);
+        updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
         map.setView([ap.lat, ap.lon], 7);
       } else {
         document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
@@ -154,9 +156,11 @@ async function loadData() {
     populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
     if (airports.length > 0) {
       const airportSelect = document.getElementById("airportSelect");
-      airportSelect.value = airports[0].code;
-      console.log(`Auto-selecting airport: ${airports[0].code}`);
-      const ap = airportData[airports[0].code];
+      const code = airports[0].code; // Explicitly set code
+      airportSelect.value = code;    // Set the dropdown value
+      const ap = airportData[code];
+      console.log(`Auto-selecting airport: ${code}`);
+
       document.getElementById("homeBaseInfo").innerHTML = `
         <strong>${ap.code} - ${ap.airport_name}</strong><br>
         ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
@@ -164,7 +168,7 @@ async function loadData() {
         <strong>Runways:</strong><br>
         ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
       `;
-      updateMap(ap.lat, ap.lon, `${ap.code} - ${ap.airport_name}`);
+      updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
       map.setView([ap.lat, ap.lon], 7);
     } else {
       document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
@@ -1282,7 +1286,7 @@ function showTripSummary() {
 
   const summary = `
     <div class="summary-container">
-      <h1>🛫 Triangle Trip Summary</h1>
+      <h1>🛫 Cross Country Trip Summary</h1>
       <div class="airport-section">
         <h2>Home Base: ${homeCode}</h2>
         <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state} <span class="airspace">(Class ${home.airspace})</span></p>
@@ -1327,7 +1331,7 @@ function showTripSummary() {
   `;
 
   const reportWindow = window.open("", "Trip Summary", "width=650,height=650");
-  reportWindow.document.write(`<html><head><title>Triangle Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
+  reportWindow.document.write(`<html><head><title>Cross Country Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
   reportWindow.document.close();
 }
 
