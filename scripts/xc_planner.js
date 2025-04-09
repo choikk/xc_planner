@@ -1675,62 +1675,90 @@ function captureMapAsPNG(homeCode, firstCode, secondCode, callback) {
   // Close all open popups
   map.closePopup();
 
-  // Define bounds based on selected airports
-  const home = airportData[homeCode];
-  const first = airportData[firstCode];
-  const bounds = [
-    [home.lat, home.lon],
-    [first.lat, first.lon]
-  ];
-
-  if (secondCode && airportData[secondCode]) {
-    const second = airportData[secondCode];
-    bounds.push([second.lat, second.lon]);
-  }
-
-  // Fit map to bounds with more padding for wider view
-  map.fitBounds(bounds, {
-    padding: [100, 100], // Increased padding for more context
-    maxZoom: 8          // Reduced max zoom for broader view
-  });
-
-  // Store original styles
-  const originalWidth = mapElement.style.width;
-  const originalHeight = mapElement.style.height;
+  // Store original background
   const originalBackground = mapElement.style.backgroundColor;
 
-  // Set map size to match capture size and ensure white background
-  mapElement.style.width = "600px";
-  mapElement.style.height = "400px";
+  // Ensure white background
   mapElement.style.backgroundColor = "#ffffff";
 
-  // Force redraw with new size
+  // Force redraw without resizing
   map.invalidateSize();
 
   setTimeout(() => {
+    // Get current map dimensions
+    const rect = mapElement.getBoundingClientRect();
+    const nativeWidth = rect.width;
+    const nativeHeight = rect.height;
+
     domtoimage.toPng(mapElement, {
       bgcolor: "#ffffff",
       quality: 1,
-      width: 600,        // Fixed width
-      height: 400        // Fixed height
+      width: nativeWidth,
+      height: nativeHeight
     }).then(dataUrl => {
-      console.log("Map captured as PNG");
-      // Restore original styles
-      mapElement.style.width = originalWidth;
-      mapElement.style.height = originalHeight;
-      mapElement.style.backgroundColor = originalBackground;
-      map.invalidateSize(); // Redraw map to original size
-      callback(dataUrl);
+      console.log("Map captured at native size:", nativeWidth, "x", nativeHeight);
+
+      // Create an image object to resize
+      const img = new Image();
+      img.onload = () => {
+        // Target size
+        const targetWidth = 600;
+        const targetHeight = 400;
+
+        // Calculate scaling to preserve aspect ratio
+        const nativeAspect = nativeWidth / nativeHeight;
+        const targetAspect = targetWidth / targetHeight;
+        let scaledWidth, scaledHeight;
+
+        if (nativeAspect > targetAspect) {
+          // Wider than target: fit to width, letterbox height
+          scaledWidth = targetWidth;
+          scaledHeight = Math.round(targetWidth / nativeAspect);
+        } else {
+          // Taller than target: fit to height, letterbox width
+          scaledHeight = targetHeight;
+          scaledWidth = Math.round(targetHeight * nativeAspect);
+        }
+
+        // Create canvas for resized image with letterboxing
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext("2d");
+
+        // Fill with white background for letterboxing
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+        // Center the scaled image
+        const offsetX = (targetWidth - scaledWidth) / 2;
+        const offsetY = (targetHeight - scaledHeight) / 2;
+        ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+
+        // Get resized PNG data URL
+        const resizedDataUrl = canvas.toDataURL("image/png");
+        console.log("Map resized to 600x400 with aspect ratio preserved");
+
+        // Restore original background
+        mapElement.style.backgroundColor = originalBackground;
+        map.invalidateSize();
+
+        callback(resizedDataUrl);
+      };
+      img.onerror = () => {
+        console.error("Error loading captured image for resizing");
+        mapElement.style.backgroundColor = originalBackground;
+        map.invalidateSize();
+        callback(null);
+      };
+      img.src = dataUrl;
     }).catch(err => {
       console.error("Error capturing map:", err);
-      // Restore original styles on error
-      mapElement.style.width = originalWidth;
-      mapElement.style.height = originalHeight;
       mapElement.style.backgroundColor = originalBackground;
       map.invalidateSize();
       callback(null);
     });
-  }, 300); // Increased delay to ensure zoom and resize settle
+  }, 500); // Delay for full render
 }
 
 function showCredits() {
