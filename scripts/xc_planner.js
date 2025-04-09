@@ -116,6 +116,8 @@ async function loadData() {
       console.log(`Auto-selecting state: ${states[0]}`);
       const key = `${selectedCountry}-${states[0]}`;
       const airports = airportsByState[key] || [];
+      // Sort airports alphabetically by code
+      airports.sort((a, b) => a.code.localeCompare(b.code));
       console.log(`Airports for ${key}: ${airports.length}`);
 
       populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
@@ -123,7 +125,6 @@ async function loadData() {
         const airportSelect = document.getElementById("airportSelect");
         airportSelect.value = airports[0].code;
         console.log(`Auto-selecting airport: ${airports[0].code}`);
-        // Only update map and info, do not trigger search
         const ap = airportData[airports[0].code];
         document.getElementById("homeBaseInfo").innerHTML = `
           <strong>${ap.code} - ${ap.airport_name}</strong><br>
@@ -146,6 +147,8 @@ async function loadData() {
     const key = `${selectedCountry}-${selectedState}`;
     console.log(`State selected: ${selectedState}, Key: ${key}`);
     const airports = airportsByState[key] || [];
+    // Sort airports alphabetically by code
+    airports.sort((a, b) => a.code.localeCompare(b.code));
     console.log(`Airports found: ${airports.length}`);
 
     populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
@@ -153,7 +156,6 @@ async function loadData() {
       const airportSelect = document.getElementById("airportSelect");
       airportSelect.value = airports[0].code;
       console.log(`Auto-selecting airport: ${airports[0].code}`);
-      // Only update map and info, do not trigger search
       const ap = airportData[airports[0].code];
       document.getElementById("homeBaseInfo").innerHTML = `
         <strong>${ap.code} - ${ap.airport_name}</strong><br>
@@ -163,7 +165,7 @@ async function loadData() {
         ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
       `;
       updateMap(ap.lat, ap.lon, `${ap.code} - ${ap.airport_name}`);
-      map.setView([ap.lat, ap.lon], 6);
+      map.setView([ap.lat, ap.lon], 7);
     } else {
       document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
     }
@@ -184,8 +186,7 @@ async function loadData() {
     `;
     updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
     resetTripState();
-    map.setView([ap.lat, ap.lon], 6);
-    // Removed findDestinations() from here; it will only run on button click
+    map.setView([ap.lat, ap.lon], 7);
   });
 
   // Set initial values but don’t trigger search
@@ -195,7 +196,7 @@ async function loadData() {
 }
 
 function initMap() {
-  map = L.map("map").setView([39.8283, -98.5795], 6); // Centered on U.S.
+  map = L.map("map").setView([39.8283, -98.5795], 7); // Centered on U.S.
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
