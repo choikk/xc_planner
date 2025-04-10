@@ -300,7 +300,7 @@ for _, row in df_base.iterrows():
         "site_no": site_no,
         "lat": float(row["LAT_DECIMAL"]),
         "lon": float(row["LONG_DECIMAL"]),
-        "elev": float(row["ELEV"]),
+        "elevation": float(row["ELEV"]),
         "city": str(row.get("CITY", "")).strip(),
         "state": state,
         "country": country_code,
