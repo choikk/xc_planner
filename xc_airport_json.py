@@ -287,12 +287,15 @@ for _, row in df_base.iterrows():
     country_code = str(row.get("COUNTRY_CODE", "")).strip()
     state_name = str(row.get("STATE_NAME", "")).strip()
     county_name = str(row.get("COUNTY_NAME", "")).strip()
+    fuel_types  = str(row.get("FUEL_TYPES", "")).strip()
 
 # Replace "nan" with "" to treat it as empty
     if state_name.lower() == "nan":
         state_name = ""
     if county_name.lower() == "nan":
         county_name = ""
+    if fuel_types == "":
+        fuel_types = "None"
 
     state = state_name if state_name else (county_name if county_name else "unknown")
 
@@ -307,7 +310,7 @@ for _, row in df_base.iterrows():
         "airport_name": str(row.get("ARPT_NAME", "")).strip(),
         "runways": rwy_dict.get(site_no, []),
         "airspace": airspace["airspace"],
-        "fuel": str(row.get("FUEL_TYPES", "")).strip(),
+        "fuel": fuel_types,
         "remarks": airspace["remarks"],
         "approaches": approaches
     }
