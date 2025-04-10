@@ -144,11 +144,13 @@ df_base = df_base[df_base["SITE_TYPE_CODE"].str.upper() == "A"]
 df_base["ICAO_ID"] = df_base["ICAO_ID"].fillna("").str.strip().str.upper()
 df_base["ARPT_ID"] = df_base["ARPT_ID"].fillna("").str.strip().str.upper()
 df_base["AirportCode"] = df_base["ICAO_ID"]
+df_base["FUEL_TYPES"] = df_base["FUEL_TYPES"].fillna("").str.strip().str.upper()
 df_base.loc[df_base["AirportCode"] == "", "AirportCode"] = df_base["ARPT_ID"]
 
-df_base["LAT_DECIMAL"] = pd.to_numeric(df_base["LAT_DECIMAL"], errors="coerce")
+df_base["LAT_DECIMAL"]  = pd.to_numeric(df_base["LAT_DECIMAL"], errors="coerce")
 df_base["LONG_DECIMAL"] = pd.to_numeric(df_base["LONG_DECIMAL"], errors="coerce")
-df_base = df_base.dropna(subset=["AirportCode", "LAT_DECIMAL", "LONG_DECIMAL", "SITE_NO"])
+df_base["ELEV"]         = pd.to_numeric(df_base["ELEV"], errors="coerce")
+df_base = df_base.dropna(subset=["AirportCode", "LAT_DECIMAL", "LONG_DECIMAL", "SITE_NO", "ELEV"])
 
 # === LOAD RUNWAY DATA ===
 apt_rwy_csv = os.path.join(path, "APT_RWY.csv")
@@ -298,12 +300,14 @@ for _, row in df_base.iterrows():
         "site_no": site_no,
         "lat": float(row["LAT_DECIMAL"]),
         "lon": float(row["LONG_DECIMAL"]),
+        "elev": float(row["ELEV"]),
         "city": str(row.get("CITY", "")).strip(),
         "state": state,
         "country": country_code,
         "airport_name": str(row.get("ARPT_NAME", "")).strip(),
         "runways": rwy_dict.get(site_no, []),
         "airspace": airspace["airspace"],
+        "fuel": str(row.get("FUEL_TYPES", "")).strip(),
         "remarks": airspace["remarks"],
         "approaches": approaches
     }
