@@ -1,4 +1,4 @@
-let APP_VERSION = "v1.3"; // or whatever you like
+let APP_VERSION = "v1.4"; // or whatever you like
 let FILE_DATE = new Date(document.lastModified).toISOString().split("T")[0];
 let DATABASE_VERSION = "UNKNOWN"; // default fallback
 
@@ -130,6 +130,8 @@ async function loadData() {
         document.getElementById("homeBaseInfo").innerHTML = `
           <strong>${code} - ${ap.airport_name}</strong><br>
           ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
+          Elevation: ${ap.elevation}ft<br>
+          Fuel Type: ${ap.fuel}<br>
           Airspace: ${ap.airspace}<br>
           <strong>Runways:</strong><br>
           ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
@@ -161,6 +163,8 @@ async function loadData() {
       document.getElementById("homeBaseInfo").innerHTML = `
         <strong>${code} - ${ap.airport_name}</strong><br>
         ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
+        Elevation: ${ap.elevation}ft<br>
+        Fuel Type: ${ap.fuel}<br>
         Airspace: ${ap.airspace}<br>
         <strong>Runways:</strong><br>
         ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
@@ -181,6 +185,8 @@ async function loadData() {
     document.getElementById("homeBaseInfo").innerHTML = `
       <strong>${code} - ${ap.airport_name}</strong><br>
       ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
+      Elevation: ${ap.elevation}ft<br>
+      Fuel Type: ${ap.fuel}<br>
       Airspace: ${ap.airspace}<br>
       <strong>Runways:</strong><br>
       ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
@@ -218,6 +224,8 @@ async function loadData() {
     document.getElementById("homeBaseInfo").innerHTML = `
       <strong>${savedHomeBase} - ${ap.airport_name}</strong><br>
       ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
+      Elevation: ${ap.elevation}ft<br>
+      Fuel Type: ${ap.fuel}<br>
       Airspace: ${ap.airspace}<br>
       <strong>Runways:</strong><br>
       ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
@@ -315,11 +323,6 @@ function populateSelect(id, items, values) {
     opt.textContent = item;
     sel.appendChild(opt);
   });
-}
-
-function updateLabel(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = value;
 }
 
 function syncFirstLegInputsFromSlider() {
@@ -452,6 +455,8 @@ function findDestinations() {
   const totalLegMin = parseInt(document.getElementById("totalLegMinInput").value);
   const totalLegMax = parseInt(document.getElementById("totalLegMaxInput").value);
   const isTriangle = document.querySelector('input[name="tripType"]:checked').value === "two"; 
+  const maxElev = parseInt(document.getElementById("maxAirportElev").value);
+  const mustHaveFuel = document.getElementById("mustHaveFuel").checked;
 
   const results = [];
   
@@ -499,9 +504,10 @@ function findDestinations() {
       // OR logic: include if it matches any selected condition
       if (!matchesAnyApproach && !matchesNone) continue;
     }
-
     const dist = haversine(base.lat, base.lon, airport.lat, airport.lon);
     if (dist < firstLegMin || dist > firstLegMax) continue;
+    if (airport.elevation > maxElev) continue;
+    if (mustHaveFuel && airport.fuel == "None") continue;
     if (isTriangle && dist * 2 > totalLegMax) continue;
 
     results.push({
@@ -511,7 +517,9 @@ function findDestinations() {
       state: airport.state,
       distance: dist.toFixed(1),
       lat: airport.lat,
-      lon: airport.lon
+      lon: airport.lon,
+      elevation: airport.elevation,
+      fuel: airport.fuel
     });
   }
 
@@ -584,27 +592,14 @@ function displayResults(results, selectedCode = null) {
 
     marker.bindPopup(`
       <div>
-        <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
+        <strong>${r.code}</strong> (Elevation ${ap.elevation}ft, Class ${ap.airspace}) - ${r.distance} NM<br>
         ${ap.airport_name}<br>
+        Fuel: ${ap.fuel}<br>
         Total: ${(r.distance * 2).toFixed(1)} NM<br><br>
         <strong>Runways</strong>:<br>${runwaysAndApproaches || "No runway data available"}<br>
         <button onclick="showTwoLegSummary()">📋 Summary Report</button>
       </div>
     `);
-
-//    marker.bindPopup(() => {
-//      const popupContent = L.DomUtil.create("div");
-//      popupContent.innerHTML = `
-//        <strong>${r.code}</strong> (Class ${ap.airspace}) - ${r.distance} NM<br>
-//        ${ap.airport_name}<br>
-//        Total: ${(r.distance * 2).toFixed(1)} NM<br><br>
-//        <strong>Runways</strong>:<br>${runwaysAndApproaches}<br>
-//        <button class="summary-btn">📋 Summary Report</button>
-//      `;
-//      const btn = popupContent.querySelector(".summary-btn");
-//      btn.addEventListener("click", () => showTwoLegSummary());
-//      return popupContent;
-//    });
 
     marker.on("click", () => {
       const radio = document.querySelector(`input[name="firstLeg"][value="${r.code}"]`);
@@ -687,7 +682,9 @@ function findSecondLeg() {
   const selectedAirspaces = [...document.querySelectorAll(".airspace:checked")].map(el => el.value);
   const selectedApproaches = [...document.querySelectorAll(".approach:checked")].map(el => el.value); // Includes "None" if checked
   const minRunwayLength = parseInt(document.getElementById("minRunwayLength").value);
-  
+  const maxElev = parseInt(document.getElementById("maxAirportElev").value);
+  const mustHaveFuel = document.getElementById("mustHaveFuel").checked;
+ 
   const secondLegResults = [];
 
   for (const [code, airport] of Object.entries(airportData)) {
@@ -740,6 +737,8 @@ function findSecondLeg() {
     const secondToBase = haversine(airport.lat, airport.lon, base.lat, base.lon);
     const totalDistance = baseToFirst + firstToSecond + secondToBase;
 
+    if (airport.elevation > maxElev) continue;
+    if (mustHaveFuel && airport.fuel == "None") continue;
     if (totalDistance >= totalMin && totalDistance <= totalMax) {
       secondLegResults.push({
         code,
@@ -747,6 +746,8 @@ function findSecondLeg() {
         city: airport.city,
         state: airport.state,
         airspace: airport.airspace,
+        elevation: airport.elevation,
+        fuel: airport.fuel,
         totalDistance: totalDistance.toFixed(1),
         leg2Distance: firstToSecond.toFixed(1),
         leg3Distance: secondToBase.toFixed(1),
@@ -854,8 +855,9 @@ function displaySecondLegResults(results, selectedCode = null) {
       icon: squareMarker(color)
     }).addTo(map)
       .bindPopup(`
-        <strong>${r.code}</strong> (Class ${ap.airspace})<br>
+        <strong>${r.code}</strong> (Elevation ${ap.elevation}ft, Class ${ap.airspace})<br>
         ${ap.airport_name}<br>
+        Fuel: ${ap.fuel}<br>
         1st Leg: ${haversine(
             airportData[r.homeCode].lat,
             airportData[r.homeCode].lon,
@@ -1322,18 +1324,18 @@ function showTripSummary() {
       <h1>🛫 Cross Country Trip Summary</h1>
       <div class="airport-section">
         <h2>Home Base: ${homeCode}</h2>
-        <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state} <span class="airspace">(Class ${home.airspace})</span></p>
-        <p class="details"><strong>Runways & Approaches:</strong><br>${homeRunwaysAndApproaches}</p>
+        <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state}<br><span class="airspace">(Elev.: ${home.elevation} ft | Fuel: ${home.fuel} | Class ${home.airspace})</span></p>
+        <p class="details"><strong>Runways:</strong><br>${homeRunwaysAndApproaches}</p>
       </div>
       <div class="airport-section">
         <h2>First Destination: ${firstCode}</h2>
-        <p class="airport-info">${first.airport_name}, ${first.city}, ${first.state} <span class="airspace">(Class ${first.airspace})</span></p>
-        <p class="details"><strong>Runways & Approaches:</strong><br>${firstRunwaysAndApproaches}</p>
+        <p class="airport-info">${first.airport_name}, ${first.city}, ${first.state}<br><span class="airspace">(Elev.: ${first.elevation} ft | Fuel: ${first.fuel} | Class ${first.airspace})</span></p>
+        <p class="details"><strong>Runways:</strong><br>${firstRunwaysAndApproaches}</p>
       </div>
       <div class="airport-section">
         <h2>Second Destination: ${secondCode}</h2>
-        <p class="airport-info">${second.airport_name}, ${second.city}, ${second.state} <span class="airspace">(Class ${second.airspace})</span></p>
-        <p class="details"><strong>Runways & Approaches:</strong><br>${secondRunwaysAndApproaches}</p>
+        <p class="airport-info">${second.airport_name}, ${second.city}, ${second.state}<br><span class="airspace">(Elev.: ${second.elevation} ft | Fuel: ${second.fuel} | Class ${second.airspace})</span></p>
+        <p class="details"><strong>Runways:</strong><br>${secondRunwaysAndApproaches}</p>
       </div>
       <div class="distance-section">
         <h3>📏 Trip Distances</h3>
@@ -1370,7 +1372,7 @@ function showTripSummary() {
     </style>
   `;
 
-  const reportWindow = window.open("", "Trip Summary", "width=650,height=700");
+  const reportWindow = window.open("", "Trip Summary", "width=650,height=800");
   reportWindow.document.write(`<html><head><title>Cross Country Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
 
   captureMapAsPNG(homeCode, firstCode, secondCode, dataUrl => {
@@ -1429,13 +1431,13 @@ function showTwoLegSummary() {
       <h1>🛫 Cross Country Trip Summary</h1>
       <div class="airport-section">
         <h2>Home Base: ${homeCode}</h2>
-        <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state} <span class="airspace">(Class ${home.airspace})</span></p>
-        <p class="details"><strong>Runways & Approaches:</strong><br>${homeRunwaysAndApproaches}</p>
+        <p class="airport-info">${home.airport_name}, ${home.city}, ${home.state}<br><span class="airspace">(Elev.: ${home.elevation} ft | Fuel: ${home.fuel} | Class ${home.airspace})</span></p>
+        <p class="details"><strong>Runways:</strong><br>${homeRunwaysAndApproaches}</p>
       </div>
       <div class="airport-section">
         <h2>Destination: ${destCode}</h2>
-        <p class="airport-info">${dest.airport_name}, ${dest.city}, ${dest.state} <span class="airspace">(Class ${dest.airspace})</span></p>
-        <p class="details"><strong>Runways & Approaches:</strong><br>${destRunwaysAndApproaches}</p>
+        <p class="airport-info">${dest.airport_name}, ${dest.city}, ${dest.state}<br><span class="airspace">(Elev.: ${dest.elevation} ft | Fuel: ${dest.fuel} | Class ${dest.airspace})</span></p>
+        <p class="details"><strong>Runways:</strong><br>${destRunwaysAndApproaches}</p>
       </div>
       <div class="distance-section">
         <h3>📏 Trip Distances</h3>
@@ -1470,7 +1472,7 @@ function showTwoLegSummary() {
     </style>
   `;
 
-  const reportWindow = window.open("", "Trip Summary", "width=650,height=550");
+  const reportWindow = window.open("", "Trip Summary", "width=650,height=800");
   reportWindow.document.write(`<html><head><title>Cross Country Trip Summary</title>${styles}</head><body>${summary}</body></html>`);
 
   captureMapAsPNG(homeCode, destCode, null, dataUrl => {

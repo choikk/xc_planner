@@ -144,11 +144,13 @@ df_base = df_base[df_base["SITE_TYPE_CODE"].str.upper() == "A"]
 df_base["ICAO_ID"] = df_base["ICAO_ID"].fillna("").str.strip().str.upper()
 df_base["ARPT_ID"] = df_base["ARPT_ID"].fillna("").str.strip().str.upper()
 df_base["AirportCode"] = df_base["ICAO_ID"]
+df_base["FUEL_TYPES"] = df_base["FUEL_TYPES"].fillna("").str.strip().str.upper()
 df_base.loc[df_base["AirportCode"] == "", "AirportCode"] = df_base["ARPT_ID"]
 
-df_base["LAT_DECIMAL"] = pd.to_numeric(df_base["LAT_DECIMAL"], errors="coerce")
+df_base["LAT_DECIMAL"]  = pd.to_numeric(df_base["LAT_DECIMAL"], errors="coerce")
 df_base["LONG_DECIMAL"] = pd.to_numeric(df_base["LONG_DECIMAL"], errors="coerce")
-df_base = df_base.dropna(subset=["AirportCode", "LAT_DECIMAL", "LONG_DECIMAL", "SITE_NO"])
+df_base["ELEV"]         = pd.to_numeric(df_base["ELEV"], errors="coerce")
+df_base = df_base.dropna(subset=["AirportCode", "LAT_DECIMAL", "LONG_DECIMAL", "SITE_NO", "ELEV"])
 
 # === LOAD RUNWAY DATA ===
 apt_rwy_csv = os.path.join(path, "APT_RWY.csv")
@@ -285,12 +287,15 @@ for _, row in df_base.iterrows():
     country_code = str(row.get("COUNTRY_CODE", "")).strip()
     state_name = str(row.get("STATE_NAME", "")).strip()
     county_name = str(row.get("COUNTY_NAME", "")).strip()
+    fuel_types  = str(row.get("FUEL_TYPES", "")).strip()
 
 # Replace "nan" with "" to treat it as empty
     if state_name.lower() == "nan":
         state_name = ""
     if county_name.lower() == "nan":
         county_name = ""
+    if fuel_types == "":
+        fuel_types = "None"
 
     state = state_name if state_name else (county_name if county_name else "unknown")
 
@@ -298,12 +303,14 @@ for _, row in df_base.iterrows():
         "site_no": site_no,
         "lat": float(row["LAT_DECIMAL"]),
         "lon": float(row["LONG_DECIMAL"]),
+        "elevation": float(row["ELEV"]),
         "city": str(row.get("CITY", "")).strip(),
         "state": state,
         "country": country_code,
         "airport_name": str(row.get("ARPT_NAME", "")).strip(),
         "runways": rwy_dict.get(site_no, []),
         "airspace": airspace["airspace"],
+        "fuel": fuel_types,
         "remarks": airspace["remarks"],
         "approaches": approaches
     }
