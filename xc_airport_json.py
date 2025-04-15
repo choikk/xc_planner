@@ -1,3 +1,4 @@
+import sys
 import os
 import pandas as pd
 import json
@@ -10,6 +11,8 @@ from bs4 import BeautifulSoup
 import zipfile
 from io import BytesIO
 import shutil
+
+output_dir = "json_data"
 
 # Current date (system-provided: April 07, 2025, 8:21 PM PDT)
 CURRENT_DATE = datetime(2025, 4, 7, 20, 21)
@@ -51,9 +54,22 @@ def get_current_nasr_effective_date():
         return effective_date
     except Exception as e:
         print(f"⚠️ Failed to fetch current NASR effective date: {e}")
-        return "2025-03-20"
+        return "9999-99-99"
 
 effective_date = get_current_nasr_effective_date()
+
+# Step 1: Check if db_versions.txt exists and read the current version
+try:
+    with open(os.path.join(output_dir, "db_versions.txt"), "r") as f:
+        current_version = f.read().strip()
+except FileNotFoundError:
+    current_version = None
+
+# Step 2: Compare with effective_date and halt if identical
+if current_version == effective_date:
+    print("✅ Database is already up to date:", effective_date)
+    sys.exit(0)
+
 print(f"✅ Current NASR effective date: {effective_date}")
 
 # Construct ZIP URL
@@ -130,11 +146,6 @@ path = os.path.join(extract_path, "CSV_Data")
 if not os.path.isdir(path):
     print(f"⚠️ CSV_Data subfolder not found at {path}; check ZIP contents")
     raise FileNotFoundError("CSV_Data subfolder missing")
-
-# Write effective_date to db_versions.txt
-with open("db_versions.txt", "w") as f:
-    f.write(effective_date + "\n")
-print("✅ Version written to db_versions.txt:", effective_date)
 
 # === LOAD AIRPORT BASE CSV ===
 apt_base_csv = os.path.join(path, "APT_BASE.csv")
@@ -317,7 +328,6 @@ for _, row in df_base.iterrows():
 
 
 # === SAVE JSON ===
-output_dir = "json_data"
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, "airport_base_info_with_runways_airspace_approaches.json")
 output_mini_path = os.path.join(output_dir, "airport_base_info_with_runways_airspace_approaches_mini.json")
@@ -332,3 +342,6 @@ print(f"✅ JSON with runways, airspace, and approaches saved: {output_path} ({l
 with open(os.path.join(output_dir, "db_versions.txt"), "w") as f:
     f.write(effective_date + "\n")
 print("✅ Version written to db_versions.txt:", effective_date)
+
+# Exit with code 1 to indicate update happened
+sys.exit(1)
