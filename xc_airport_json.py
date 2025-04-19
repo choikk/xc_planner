@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 import zipfile
 from io import BytesIO
 import shutil
+from pathlib import Path
 
 output_dir = "json_data"
 
@@ -18,7 +19,10 @@ output_dir = "json_data"
 CURRENT_DATE = datetime(2025, 4, 7, 20, 21)
 
 # Base path for 28-day subscription folders
-BASE_PATH = "/Users/kchoi/Workspace/airport_data"
+#BASE_PATH = "/Users/kchoi/Workspace/airport_data"
+BASE_PATH = Path(__file__).resolve().parent
+extract_path = BASE_PATH / "json_data" / "tmp"
+extract_path.mkdir(parents=True, exist_ok=True)
 
 # NASR subscription page URL and ZIP base URL
 NASR_SUB_URL = "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/"
