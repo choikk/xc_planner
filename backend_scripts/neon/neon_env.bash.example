@@ -1,0 +1,1 @@
+export NEON_DATABASE_URL='postgresql://username:password@host/database?sslmode=require'

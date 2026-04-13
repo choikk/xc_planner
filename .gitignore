@@ -9,3 +9,6 @@ dist/
 # macOS metadata
 .DS_Store
 **/.DS_Store
+
+# Local secret environment files
+backend_scripts/neon/neon_env.bash
