@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DLBXS1KP3W"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-DLBXS1KP3W');
+  </script>
+
+  <meta charset="UTF-8" />
+  <title>Cross Country Trip Planner</title>
+  <link rel="stylesheet" href="styles/xc_planner.css" />
+<!--  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> -->
+  <link rel="stylesheet" href="styles/leaflet/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="left-panel">
+      <h1 id="titleHeading" class="title-heading" title="Click for credits">🛫 Cross Country Flight Planner <span class="versionNumber"></span></h1>
+      <div class="control-section">
+      <hr>
+        <h2>Home Base Airport</h2>
+        <section>
+          <label>Country: <select id="countrySelect"></select></label>
+          <label>State: <select id="stateSelect"></select></label>
+          <label>Airport: <select id="airportSelect"></select></label>
+          <div id="homeBaseInfo" class="home-base-info"></div>
+        </section>
+        <hr>
+        <section>
+          <h2>Destination Airports</h2>
+          <div class="filter-group">
+            <strong>Surface Type:</strong><br>
+            <div class="checkbox-group">
+              <label><input type="checkbox" class="surface" value="ASPH" checked> Asphalt</label>
+              <label><input type="checkbox" class="surface" value="CONC" checked> Concrete</label>
+              <label><input type="checkbox" class="surface" value="TURF"> Grass</label>
+              <label><input type="checkbox" class="surface" value="OTHER"> Other</label>
+            </div>
+          </div>
+          <div class="filter-group">
+            <strong>Airspace Classes:</strong><br>
+            <div class="checkbox-group">
+              <label><input type="checkbox" class="airspace" value="B"> Class B</label>
+              <label><input type="checkbox" class="airspace" value="C"> Class C</label>
+              <label><input type="checkbox" class="airspace" value="D" checked> Class D</label>
+              <label><input type="checkbox" class="airspace" value="E" checked> Class E</label>
+              <label><input type="checkbox" class="airspace" value="G" checked> Class G</label>
+            </div>
+          </div>
+          <div class="filter-group">
+            <strong>Instrument Approaches:</strong><br>
+            <div class="checkbox-group">
+              <label><input type="checkbox" class="approach" value="RNAV" checked> RNAV</label>
+              <label><input type="checkbox" class="approach" value="ILS/LOC" checked> ILS/LOC</label>
+              <label><input type="checkbox" class="approach" value="VOR/NDB" checked> VOR/NDB</label>
+              <label><input type="checkbox" class="approach" value="None"> None</label>
+            </div>
+          </div>
+
+          <div class="slider-container">
+            <label><strong>Minimum Runway Length:</strong>
+              <input type="range" id="minRunwayLength" min="500" max="15000" step="100" value="3000" oninput="updateLabel('runwayLabel', this.value)">
+              <span id="runwayLabel">3000</span> ft
+            </label>
+            <label><strong>Maximum Field Elevation:</strong>
+              <input type="range" id="maxAirportElev" min="1000" max="10000" step="100" value="6000" oninput="updateLabel('elevLabel', this.value)">
+              <span id="elevLabel">6000</span> ft
+            </label>
+            <label><strong>Fuel Service Required:</strong>
+              <input type="checkbox" id="mustHaveFuel" checked>
+            </label>
+          </div>
+          <div class="radio-group inline-radio">
+            <strong>Trip Type:</strong><br>
+            <label><input type="radio" id="tripOne" name="tripType" value="one" checked onchange="toggleTotalLeg()"> One Destination (Round Trip)</label>
+            <label><input type="radio" id="tripTriangle" name="tripType" value="two" onchange="toggleTotalLeg()"> Two Destinations (Triangle Trip)</label>
+          </div>
+          <div class="compact-slider-row">
+            <div class="compact-slider" id="firstLegSlider">
+              <label>First Leg (NM):</label>
+              <div class="range-slider">
+                <div class="range-values">
+                  <span id="firstLegMinValue">50</span>
+                  <span id="firstLegMaxValue">100</span>
+                </div>
+                <div class="dual-slider-track">
+                  <input type="range" id="firstLegMin" min="10" max="500" step="10" value="50">
+                  <input type="range" id="firstLegMax" min="10" max="500" step="10" value="100">
+                </div>
+              </div>
+              <div class="range-inputs">
+                <input type="number" id="firstLegMinInput" min="10" max="500" step="10" value="50">
+                <span>–</span>
+                <input type="number" id="firstLegMaxInput" min="10" max="500" step="10" value="100">
+              </div>
+            </div>
+            <div class="compact-slider" id="totalTripSlider" style="display: none;">
+              <label>Total Trip (NM):</label>
+              <div class="range-slider">
+                <div class="range-values">
+                  <span id="totalLegMinValue">150</span>
+                  <span id="totalLegMaxValue">200</span>
+                </div>
+                <div class="dual-slider-track">
+                  <input type="range" id="totalLegMin" min="20" max="1500" step="10" value="150">
+                  <input type="range" id="totalLegMax" min="20" max="1500" step="10" value="200">
+                </div>
+              </div>
+              <div class="range-inputs">
+                <input type="number" id="totalLegMinInput" min="20" max="1500" step="10" value="150">
+                <span>–</span>
+                <input type="number" id="totalLegMaxInput" min="20" max="1500" step="10" value="200">
+              </div>
+            </div>
+          </div>
+          <div class="sort-group inline-radio">
+            <strong>Sort results by:</strong><br>
+            <label><input type="radio" name="sortBy" value="leg_distance" checked onchange="sortCurrentResults()"> Leg Distance</label>
+            <label><input type="radio" name="sortBy" value="total_distance" onchange="sortCurrentResults()"> Total Distance</label>
+            <label><input type="radio" name="sortBy" value="alphabetical" onchange="sortCurrentResults()"> Alphabetical</label>
+          </div>
+        </section>
+        <div class="button-group">
+          <button id="findBtn" onclick="findDestinations()">Find First Leg Destinations</button>
+          <button id="secondLegBtn" style="display: none;" onclick="findSecondLeg()">Find Second Leg Destinations</button>
+        </div>
+        <hr>
+        <h2>Matching Airports</h2>
+        <div id="resultArea" class="result-area">
+          <p>No destinations yet. Click "Find Destinations" to search.</p>
+        </div>
+        <div id="secondLegArea" class="second-leg-area"></div>
+      </div>
+    </div>
+    <div class="right-panel">
+      <div id="map" class="map"></div>
+    </div>
+  </div>
+
+  <button onclick="showTripSummary()">📋 Summary Report</button>
+  <div id="summaryModal" class="summary-modal">
+    <button class="close-button" onclick="document.getElementById('summaryModal').style.display='none'">❌ Close</button>
+    <div id="summaryContent" class="summary-content"></div>
+  </div>
+
+  <script src="scripts/xc_planner.js"></script>
+</body>
+</html>

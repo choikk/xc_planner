@@ -1,4 +1,4 @@
-let APP_VERSION = "v1.4"; // or whatever you like
+let APP_VERSION = "v2.0"; // or whatever you like
 let FILE_DATE = new Date(document.lastModified).toISOString().split("T")[0];
 let DATABASE_VERSION = "UNKNOWN"; // default fallback
 
@@ -48,15 +48,50 @@ const triangleMarker = (color) => L.divIcon({
   "></div>`
 });
 
+const AIRPORT_DATA_ENDPOINT = "/.netlify/functions/airport-data";
+
+function normalizeArrayField(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeAirportRecord(raw, fallbackCode = null) {
+  const code = (
+    raw.airport_code ?? raw.airport_id ?? raw.icao_id ?? raw.faa_id ?? raw.code ?? fallbackCode ?? ""
+  ).toString().trim().toUpperCase();
+
+  return {
+    airport_name: raw.airport_name ?? raw.name ?? "Unknown Airport",
+    city: raw.city ?? "Unknown",
+    state: raw.state ?? raw.region ?? "unknown",
+    country: raw.country ?? raw.country_code ?? "US",
+    elevation: Number(raw.elevation ?? raw.elevation_ft ?? 0),
+    fuel: raw.fuel ?? raw.fuel_raw ?? "None",
+    airspace: raw.airspace ?? raw.airspace_class ?? "G",
+    lat: Number(raw.lat ?? raw.latitude ?? raw.latitude_deg ?? raw.lat_decimal ?? 0),
+    lon: Number(raw.lon ?? raw.longitude ?? raw.longitude_deg ?? raw.long_decimal ?? 0),
+    runways: normalizeArrayField(raw.runways),
+    approaches: normalizeArrayField(raw.approaches),
+    code,
+  };
+}
+
 async function loadDatabaseVersion() {
   try {
-    const response = await fetch("json_data/db_versions.txt");
+    const response = await fetch(`${AIRPORT_DATA_ENDPOINT}?meta=1`);
     if (!response.ok) throw new Error(`HTTP error ${response.status}`);
 
-    const text = await response.text();
-    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
-    if (lines.length > 0) {
-      DATABASE_VERSION = lines[0];
+    const payload = await response.json();
+    if (payload?.databaseVersion) {
+      DATABASE_VERSION = payload.databaseVersion;
       console.log("📦 DATABASE_VERSION loaded:", DATABASE_VERSION);
     }
   } catch (err) {
@@ -66,13 +101,25 @@ async function loadDatabaseVersion() {
 
 async function loadData() {
   try {
-    const response = await fetch("json_data/airport_base_info_with_runways_airspace_approaches.json");
+    const response = await fetch("/.netlify/functions/airport-data");
     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
     airportData = await response.json();
-    console.log("Airport data loaded:", airportData["00AL"]);
+
+    if (!airportData || typeof airportData !== "object") {
+      throw new Error("Invalid airport data payload.");
+    }
+
+    const keys = Object.keys(airportData);
+    if (keys.length === 0 || airportData.error) {
+      console.error("Airport data payload:", airportData);
+      throw new Error("No airport records returned from database.");
+    }
+
+    console.log("Airport data loaded:", keys[0], airportData[keys[0]]);
   } catch (err) {
     console.error("❌ Failed to load airport data:", err);
-    alert("Error loading airport data.");
+    alert(`Error loading airport data: ${err.message}`);
     return;
   }
 
@@ -80,108 +127,40 @@ async function loadData() {
   const statesByCountry = {};
   const airportsByState = {};
 
-  for (const code in airportData) {
+  for (const code of Object.keys(airportData)) {
     const airport = airportData[code];
-    const country = airport.country || "Unknown";
-    const state = airport.state || "Unknown";
+    if (!airport) continue;
+
+    const country = String(airport.country || "US").trim();
+    const state = String(airport.state || "unknown").trim();
 
     countries.add(country);
+
     if (!statesByCountry[country]) statesByCountry[country] = new Set();
     statesByCountry[country].add(state);
 
     const key = `${country}-${state}`;
     if (!airportsByState[key]) airportsByState[key] = [];
-    airportsByState[key].push({ code, name: airport.airport_name });
+    airportsByState[key].push({
+      code,
+      name: airport.airport_name || code
+    });
   }
 
-  populateSelect("countrySelect", [...countries].sort());
+  const countryList = [...countries].sort();
 
-  document.getElementById("countrySelect").addEventListener("change", () => {
-    const selectedCountry = document.getElementById("countrySelect").value;
-    console.log(`Country selected: ${selectedCountry}`);
-    const states = [...statesByCountry[selectedCountry]].sort();
+  if (countryList.length === 0) {
+    console.error("No countries built from airportData:", airportData);
+    alert("Database returned no usable airport rows.");
+    return;
+  }
 
-    if (selectedCountry !== "US" && states.length === 1 && states[0] === "unknown") {
-      document.getElementById("stateSelect").innerHTML = '<option value="unknown">N/A</option>';
-      document.getElementById("stateSelect").disabled = true;
-    } else {
-      populateSelect("stateSelect", states);
-      document.getElementById("stateSelect").disabled = false;
-    }
-    document.getElementById("airportSelect").innerHTML = "";
-    document.getElementById("homeBaseInfo").innerHTML = "";
+  populateSelect("countrySelect", countryList);
 
-    if (states.length > 0) {
-      const stateSelect = document.getElementById("stateSelect");
-      stateSelect.value = states[0];
-      console.log(`Auto-selecting state: ${states[0]}`);
-      const key = `${selectedCountry}-${states[0]}`;
-      const airports = airportsByState[key] || [];
-      airports.sort((a, b) => a.code.localeCompare(b.code));
-      console.log(`Airports for ${key}: ${airports.length}`);
-
-      populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
-      if (airports.length > 0) {
-        const airportSelect = document.getElementById("airportSelect");
-        airportSelect.value = airports[0].code;
-        console.log(`Auto-selecting airport: ${airports[0].code}`);
-        const code = airports[0].code;
-        const ap = airportData[code];
-        document.getElementById("homeBaseInfo").innerHTML = `
-          <strong>${code} - ${ap.airport_name}</strong><br>
-          ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
-          Elevation: ${ap.elevation}ft<br>
-          Fuel Type: ${ap.fuel}<br>
-          Airspace: ${ap.airspace}<br>
-          <strong>Runways:</strong><br>
-          ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
-        `;
-        updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-        map.setView([ap.lat, ap.lon], 7);
-      } else {
-        document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
-      }
-    }
-  });
-
-  document.getElementById("stateSelect").addEventListener("change", () => {
-    const selectedCountry = document.getElementById("countrySelect").value;
-    const selectedState = document.getElementById("stateSelect").value;
-    const key = `${selectedCountry}-${selectedState}`;
-    console.log(`State selected: ${selectedState}, Key: ${key}`);
-    const airports = airportsByState[key] || [];
-    airports.sort((a, b) => a.code.localeCompare(b.code));
-    console.log(`Airports found: ${airports.length}`);
-
-    populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
-    if (airports.length > 0) {
-      const airportSelect = document.getElementById("airportSelect");
-      const code = airports[0].code;
-      airportSelect.value = code;
-      console.log(`Auto-selecting airport: ${code}`);
-      const ap = airportData[code];
-      document.getElementById("homeBaseInfo").innerHTML = `
-        <strong>${code} - ${ap.airport_name}</strong><br>
-        ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
-        Elevation: ${ap.elevation}ft<br>
-        Fuel Type: ${ap.fuel}<br>
-        Airspace: ${ap.airspace}<br>
-        <strong>Runways:</strong><br>
-        ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
-      `;
-      updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-      map.setView([ap.lat, ap.lon], 7);
-    } else {
-      document.getElementById("airportSelect").innerHTML = "<option value=''>No airports available</option>";
-    }
-  });
-
-  const airportSelect = document.getElementById("airportSelect");
-  airportSelect.addEventListener("change", () => {
-    const code = airportSelect.value;
-    console.log(`Airport selected: ${code}`);
+  function renderHomeBase(code) {
     const ap = airportData[code];
     if (!ap) return;
+
     document.getElementById("homeBaseInfo").innerHTML = `
       <strong>${code} - ${ap.airport_name}</strong><br>
       ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
@@ -189,54 +168,107 @@ async function loadData() {
       Fuel Type: ${ap.fuel}<br>
       Airspace: ${ap.airspace}<br>
       <strong>Runways:</strong><br>
-      ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
+      ${(Array.isArray(ap.runways) ? ap.runways : [])
+        .map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`)
+        .join("<br>")}
     `;
+
     updateMap(ap.lat, ap.lon, `${code} - ${ap.airport_name}`);
-    resetTripState();
     map.setView([ap.lat, ap.lon], 7);
-    // Save the selected airport as the default home base
-    localStorage.setItem("defaultHomeBase", code);
-    console.log(`Saved default home base: ${code}`);
+  }
+
+  function populateStatesForCountry(selectedCountry) {
+    const stateSelect = document.getElementById("stateSelect");
+    const airportSelect = document.getElementById("airportSelect");
+
+    const stateSet = statesByCountry[selectedCountry];
+    const states = stateSet ? [...stateSet].sort() : [];
+
+    stateSelect.innerHTML = "";
+    airportSelect.innerHTML = "";
+    document.getElementById("homeBaseInfo").innerHTML = "";
+
+    if (states.length === 0) {
+      stateSelect.innerHTML = `<option value="">No states available</option>`;
+      airportSelect.innerHTML = `<option value="">No airports available</option>`;
+      return;
+    }
+
+    if (selectedCountry !== "US" && states.length === 1 && states[0].toLowerCase() === "unknown") {
+      stateSelect.innerHTML = `<option value="unknown">N/A</option>`;
+      stateSelect.disabled = true;
+    } else {
+      populateSelect("stateSelect", states);
+      stateSelect.disabled = false;
+    }
+
+    const initialState = stateSelect.value || states[0];
+    populateAirportsForState(selectedCountry, initialState);
+  }
+
+  function populateAirportsForState(selectedCountry, selectedState) {
+    const airportSelect = document.getElementById("airportSelect");
+    const key = `${selectedCountry}-${selectedState}`;
+    const airports = (airportsByState[key] || []).slice().sort((a, b) => a.code.localeCompare(b.code));
+
+    airportSelect.innerHTML = "";
+
+    if (airports.length === 0) {
+      airportSelect.innerHTML = `<option value="">No airports available</option>`;
+      document.getElementById("homeBaseInfo").innerHTML = "";
+      return;
+    }
+
+    populateSelect(
+      "airportSelect",
+      airports.map(a => `${a.code} - ${a.name}`),
+      airports.map(a => a.code)
+    );
+
+    airportSelect.value = airports[0].code;
+    renderHomeBase(airports[0].code);
+  }
+
+  document.getElementById("countrySelect").addEventListener("change", () => {
+    const selectedCountry = document.getElementById("countrySelect").value;
+    console.log("Country selected:", selectedCountry);
+    populateStatesForCountry(selectedCountry);
   });
 
-  // Load the saved home base or set initial default
+  document.getElementById("stateSelect").addEventListener("change", () => {
+    const selectedCountry = document.getElementById("countrySelect").value;
+    const selectedState = document.getElementById("stateSelect").value;
+    populateAirportsForState(selectedCountry, selectedState);
+  });
+
+  document.getElementById("airportSelect").addEventListener("change", () => {
+    const code = document.getElementById("airportSelect").value;
+    if (!code || !airportData[code]) return;
+
+    renderHomeBase(code);
+    resetTripState();
+    localStorage.setItem("defaultHomeBase", code);
+  });
+
   const savedHomeBase = localStorage.getItem("defaultHomeBase");
+
   if (savedHomeBase && airportData[savedHomeBase]) {
-    console.log(`Loading saved home base: ${savedHomeBase}`);
     const ap = airportData[savedHomeBase];
-    const country = ap.country;
-    const state = ap.state;
+    const savedCountry = String(ap.country || "US").trim();
+    const savedState = String(ap.state || "unknown").trim();
 
-    document.getElementById("countrySelect").value = country;
-    const countryEvent = new Event("change");
-    document.getElementById("countrySelect").dispatchEvent(countryEvent);
+    document.getElementById("countrySelect").value = savedCountry;
+    populateStatesForCountry(savedCountry);
 
-    document.getElementById("stateSelect").value = state;
-    const stateEvent = new Event("change");
-    document.getElementById("stateSelect").dispatchEvent(stateEvent);
+    document.getElementById("stateSelect").value = savedState;
+    populateAirportsForState(savedCountry, savedState);
 
-    const key = `${country}-${state}`;
-    const airports = airportsByState[key] || [];
-    airports.sort((a, b) => a.code.localeCompare(b.code));
-    populateSelect("airportSelect", airports.map(a => `${a.code} - ${a.name}`), airports.map(a => a.code));
-    airportSelect.value = savedHomeBase;
-
-    document.getElementById("homeBaseInfo").innerHTML = `
-      <strong>${savedHomeBase} - ${ap.airport_name}</strong><br>
-      ${ap.city}, ${ap.state === "unknown" ? "N/A" : ap.state}, ${ap.country}<br>
-      Elevation: ${ap.elevation}ft<br>
-      Fuel Type: ${ap.fuel}<br>
-      Airspace: ${ap.airspace}<br>
-      <strong>Runways:</strong><br>
-      ${ap.runways.map(r => `${r.rwy_id}: ${r.length} ft, ${r.surface}, ${r.condition}`).join("<br>")}
-    `;
-    updateMap(ap.lat, ap.lon, `${savedHomeBase} - ${ap.airport_name}`);
-    map.setView([ap.lat, ap.lon], 7);
+    document.getElementById("airportSelect").value = savedHomeBase;
+    renderHomeBase(savedHomeBase);
   } else {
-    // Fallback to initial default (e.g., "00AL")
-    document.getElementById("countrySelect").value = "US";
-    const initialCountryEvent = new Event("change");
-    document.getElementById("countrySelect").dispatchEvent(initialCountryEvent);
+    const defaultCountry = countryList.includes("US") ? "US" : countryList[0];
+    document.getElementById("countrySelect").value = defaultCountry;
+    populateStatesForCountry(defaultCountry);
   }
 }
 
@@ -1775,9 +1807,9 @@ Built with 💻 + 🛩️  with lots of ❤️🩵
 `);
 }
 
-window.onload = () => {
+window.onload = async () => {
   initMap();
-  loadData();
+  await loadData();
 
   const firstMin = document.getElementById("firstLegMin");
   const firstMax = document.getElementById("firstLegMax");
