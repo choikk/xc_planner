@@ -57,6 +57,10 @@ select optgroup {
   flex-wrap: nowrap;
 }
 
+.title-heading-button {
+  cursor: pointer;
+}
+
 .title-mark {
   flex: 0 0 auto;
   font-size: 1.2rem;
@@ -517,6 +521,34 @@ details { margin-bottom: .65rem; }
   background: white;
   border-radius: 20px;
   padding: 1rem;
+}
+
+.modal-close {
+  float: right;
+  min-width: 40px;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.credits-card {
+  width: min(520px, 100%);
+}
+
+.credits-card h2 {
+  margin: 0 0 .85rem;
+}
+
+.credits-lines {
+  display: grid;
+  gap: .45rem;
+  line-height: 1.45;
 }
 
 .summary-grid {

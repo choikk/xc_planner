@@ -9,6 +9,7 @@ import YourTripSection from './components/YourTripSection';
 import { useAirportData } from './hooks/useAirportData';
 import {
   findFirstLegDestinations,
+  findFilteredInRangeFirstLegDestinations,
   findNearbyOuterFirstLegDestinations,
   findSecondLegDestinations,
 } from './utils/filtering';
@@ -45,6 +46,7 @@ export default function App() {
   const [selectedSecondLegCode, setSelectedSecondLegCode] = useState('');
   const [activeLegInfo, setActiveLegInfo] = useState(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
   const [sheetState, setSheetState] = useState('half');
   const [homeRestored, setHomeRestored] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('plan');
@@ -66,6 +68,10 @@ export default function App() {
     : null;
   const firstLegResults = useMemo(
     () => findFirstLegDestinations(airportData, selectedAirportCode, filters),
+    [airportData, selectedAirportCode, filters]
+  );
+  const filteredInRangeResults = useMemo(
+    () => findFilteredInRangeFirstLegDestinations(airportData, selectedAirportCode, filters),
     [airportData, selectedAirportCode, filters]
   );
   const nearbyOuterResults = useMemo(
@@ -157,7 +163,19 @@ export default function App() {
   const panelHeader = (
     <>
       <div className="title-block">
-        <h1>
+        <h1
+          className="title-heading-button"
+          role="button"
+          tabIndex={0}
+          title="Click for credits"
+          onClick={() => setCreditsOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setCreditsOpen(true);
+            }
+          }}
+        >
           <span className="title-mark">🛫</span>
           <span className="title-text">Cross Country Flight Planner</span>
         </h1>
@@ -296,6 +314,7 @@ export default function App() {
           homeAirport={selectedAirportWithCode}
           filters={filters}
           firstLegResults={firstLegResults}
+          filteredInRangeResults={filteredInRangeResults}
           nearbyOuterResults={nearbyOuterResults}
           secondLegResults={secondLegResults}
           selectedFirstLegCode={selectedFirstLegCode}
@@ -323,6 +342,25 @@ export default function App() {
         secondLegCode={selectedSecondLegCode}
         tripType={filters.tripType}
       />
+
+      {creditsOpen && (
+        <div className="modal-backdrop" onClick={() => setCreditsOpen(false)}>
+          <div className="modal-card credits-card" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setCreditsOpen(false)}>
+              ×
+            </button>
+            <h2>Credits</h2>
+            <div className="credits-lines">
+              <div>Cross Country Flight Planner</div>
+              <div>App version: {APP_VERSION}</div>
+              <div>FAA Database as of: {databaseVersion}</div>
+              <div>Map data © OpenStreetMap contributors</div>
+              <div>Built with React, Vite, Leaflet, and a lot of care.</div>
+              <div>© 2026 pilot.drchoi@gmail.com. All rights reserved.</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -99,6 +99,36 @@ export function findFirstLegDestinations(airportData, homeCode, filters) {
   return sortResults(results, filters.sortBy, 'first');
 }
 
+export function findFilteredInRangeFirstLegDestinations(airportData, homeCode, filters) {
+  const home = airportData[homeCode];
+  if (!home) return [];
+
+  const results = [];
+  Object.entries(airportData).forEach(([code, airport]) => {
+    if (code === homeCode) return;
+
+    const distance = haversine(home.lat, home.lon, airport.lat, airport.lon);
+    if (distance < filters.firstLegMin || distance > filters.firstLegMax) return;
+    if (filters.tripType === 'two' && distance * 2 > filters.totalLegMax) return;
+    if (airportMatchesFilters(airport, filters)) return;
+
+    results.push({
+      code,
+      name: airport.airport_name,
+      city: airport.city,
+      state: airport.state,
+      airspace: airport.airspace,
+      distance,
+      lat: airport.lat,
+      lon: airport.lon,
+      elevation: airport.elevation,
+      fuel: airport.fuel,
+    });
+  });
+
+  return sortResults(results, filters.sortBy, 'first');
+}
+
 export function findNearbyOuterFirstLegDestinations(airportData, homeCode, filters, outerBufferNm = 100) {
   const home = airportData[homeCode];
   if (!home) return [];

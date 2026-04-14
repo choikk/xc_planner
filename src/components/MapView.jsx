@@ -144,6 +144,7 @@ export default function MapView({
   homeAirport,
   filters,
   firstLegResults = [],
+  filteredInRangeResults = [],
   nearbyOuterResults = [],
   secondLegResults = [],
   selectedFirstLegCode,
@@ -282,7 +283,7 @@ export default function MapView({
         ))}
         <div className="airspace-legend-row muted">
           <span className="airspace-legend-swatch outer-sample" />
-          <span>Max + 100 NM</span>
+          <span>Filtered out / Max + 100 NM</span>
         </div>
       </div>
 
@@ -335,6 +336,44 @@ export default function MapView({
             pathOptions={{
               color,
               fillColor: color,
+              fillOpacity: 0.16,
+              opacity: 0.34,
+              weight: 1.25,
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -8]}>
+              {result.code}
+            </Tooltip>
+            <Popup minWidth={290} maxWidth={480}>
+              {renderAirportPopupContent(airport, [
+                `Distance: ${result.distance.toFixed(1)} NM`,
+                `Outside max by: ${(result.distance - filters.firstLegMax).toFixed(1)} NM`,
+              ])}
+            </Popup>
+          </CircleMarker>
+        );
+      })}
+
+      {filteredInRangeResults.map((result) => {
+        const airport = airportData[result.code];
+        if (!airport) return null;
+        if (!isFiniteCoord(airport.lat, airport.lon)) return null;
+
+        const color = getAirspaceColor(airport.airspace);
+
+        return (
+          <CircleMarker
+            key={`filtered-${result.code}`}
+            center={[airport.lat, airport.lon]}
+            radius={5}
+            eventHandlers={{
+              click: (event) => {
+                L.DomEvent.stop(event.originalEvent);
+              },
+            }}
+            pathOptions={{
+              color,
+              fillColor: color,
               fillOpacity: 0.22,
               opacity: 0.45,
               weight: 1.5,
@@ -346,7 +385,8 @@ export default function MapView({
             <Popup minWidth={290} maxWidth={480}>
               {renderAirportPopupContent(airport, [
                 `Distance: ${result.distance.toFixed(1)} NM`,
-                `Outside max by: ${(result.distance - filters.firstLegMax).toFixed(1)} NM`,
+                'Excluded by current filters',
+                'Not selectable as a destination',
               ])}
             </Popup>
           </CircleMarker>
