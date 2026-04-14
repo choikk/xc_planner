@@ -1006,6 +1006,36 @@ export default function SummaryModal({
     first.detailsLoaded &&
     !(tripType === 'two' && secondLegCode && !second?.detailsLoaded)
   );
+  const previewAirportSections = detailsReady
+    ? [
+        { label: 'Home Base', code: homeCode, airport: home },
+        { label: 'First Destination', code: firstLegCode, airport: first },
+        second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
+      ].filter(Boolean)
+    : [];
+  const previewRouteKey = previewAirportSections
+    .map((section) => `${section.label}:${section.code}`)
+    .join('|');
+
+  useEffect(() => {
+    if (!open || reportMode !== 'pdf' || !detailsReady) {
+      setRouteMapPreviewUrl('');
+      return undefined;
+    }
+
+    let active = true;
+
+    (async () => {
+      const imageData = await createRouteMapImageData(previewAirportSections);
+      if (active) {
+        setRouteMapPreviewUrl(imageData?.dataUrl || '');
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [open, reportMode, detailsReady, previewRouteKey]);
 
   if (!hasRequiredSelection) return null;
   if (!hasRequiredAirports) return null;
@@ -1101,26 +1131,6 @@ export default function SummaryModal({
         : [...current, approachKey]
     ));
   };
-
-  useEffect(() => {
-    if (!open || reportMode !== 'pdf') {
-      setRouteMapPreviewUrl('');
-      return undefined;
-    }
-
-    let active = true;
-
-    (async () => {
-      const imageData = await createRouteMapImageData(summaryReport.airportSections);
-      if (active) {
-        setRouteMapPreviewUrl(imageData?.dataUrl || '');
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [open, reportMode, reportKey]);
 
   const handleGeneratePdf = async () => {
     if (generatingPdf) return;
