@@ -1047,7 +1047,7 @@ export default function SummaryModal({
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
-    const media = window.matchMedia('(max-width: 900px)');
+    const media = window.matchMedia('(max-width: 1100px)');
     const update = () => {
       setShareSupported(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
     };
