@@ -27,9 +27,10 @@ function safeObject(value) {
 }
 
 export async function handler(event) {
-  const client = buildClient();
+  let client;
 
   try {
+    client = buildClient();
     await client.connect();
 
     const versionResult = await client.query(`
@@ -119,6 +120,8 @@ export async function handler(event) {
       }),
     };
   } finally {
-    await client.end().catch(() => {});
+    if (client) {
+      await client.end().catch(() => {});
+    }
   }
 }
