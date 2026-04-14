@@ -87,6 +87,7 @@ function MapAutoView({ homeAirport }) {
 function renderAirportPopupContent(airport, extraLines = []) {
   const approaches = Array.isArray(airport.approaches) ? airport.approaches : [];
   const runways = Array.isArray(airport.runways) ? airport.runways : [];
+  const detailsLoaded = Boolean(airport.detailsLoaded);
 
   return (
     <div className="airport-popup">
@@ -99,32 +100,42 @@ function renderAirportPopupContent(airport, extraLines = []) {
         <div key={idx}>{line}</div>
       ))}
 
-      <div className="popup-section-title">Runways:</div>
-      <ul className="popup-list">
-        {runways.map((rwy) => (
-          <li key={`${airport.airport_code}-${rwy.rwy_id}`}>
-            {rwy.rwy_id}: {rwy.length}' × {rwy.width}' {formatSurface(rwy.surface)} ({rwy.condition})
-          </li>
-        ))}
-      </ul>
+      {detailsLoaded ? (
+        <>
+          <div className="popup-section-title">Runways:</div>
+          {runways.length > 0 ? (
+            <ul className="popup-list">
+              {runways.map((rwy) => (
+                <li key={`${airport.airport_code}-${rwy.rwy_id}`}>
+                  {rwy.rwy_id}: {rwy.length}' × {rwy.width}' {formatSurface(rwy.surface)} ({rwy.condition})
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>None</div>
+          )}
 
-      <div className="popup-section-title">Instrument Approaches:</div>
-      {approaches.length > 0 ? (
-        <ul className="popup-list">
-          {approaches.map((ap) => (
-            <li key={`${airport.airport_code}-${ap.name}`}>
-              {ap.pdf_url ? (
-                <a href={ap.pdf_url} target="_blank" rel="noreferrer">
-                  {ap.name}
-                </a>
-              ) : (
-                ap.name
-              )}
-            </li>
-          ))}
-        </ul>
+          <div className="popup-section-title">Instrument Approaches:</div>
+          {approaches.length > 0 ? (
+            <ul className="popup-list">
+              {approaches.map((ap) => (
+                <li key={`${airport.airport_code}-${ap.name}`}>
+                  {ap.pdf_url ? (
+                    <a href={ap.pdf_url} target="_blank" rel="noreferrer">
+                      {ap.name}
+                    </a>
+                  ) : (
+                    ap.name
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>None</div>
+          )}
+        </>
       ) : (
-        <div>None</div>
+        <div className="popup-section-title">Loading airport details...</div>
       )}
     </div>
   );
@@ -154,6 +165,7 @@ export default function MapView({
   onSelectSecondLeg,
   onOpenSummary,
   airportData,
+  onRequestAirportDetails,
 }) {
   const [infoPopup, setInfoPopup] = useState(null);
 
@@ -192,6 +204,12 @@ export default function MapView({
   useEffect(() => {
     setInfoPopup(null);
   }, [homeAirport?.airport_code, filters, selectedFirstLegCode, selectedSecondLegCode]);
+
+  useEffect(() => {
+    if (visibleInfoPopup?.code) {
+      onRequestAirportDetails?.(visibleInfoPopup.code);
+    }
+  }, [visibleInfoPopup?.code, onRequestAirportDetails]);
 
   const triangleLine =
     homeAirport &&
@@ -333,6 +351,9 @@ export default function MapView({
             key={`outer-${result.code}`}
             center={[airport.lat, airport.lon]}
             radius={5}
+            eventHandlers={{
+              popupopen: () => onRequestAirportDetails?.(result.code),
+            }}
             pathOptions={{
               color,
               fillColor: color,
@@ -370,6 +391,7 @@ export default function MapView({
               click: (event) => {
                 L.DomEvent.stop(event.originalEvent);
               },
+              popupopen: () => onRequestAirportDetails?.(result.code),
             }}
             pathOptions={{
               color,

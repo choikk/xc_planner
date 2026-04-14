@@ -37,7 +37,7 @@ const panelTabs = [
 const APP_VERSION = 'v2.0';
 
 export default function App() {
-  const { airportData, databaseVersion, loading, error, locationIndex } = useAirportData();
+  const { airportData, databaseVersion, loading, error, locationIndex, loadAirportDetails } = useAirportData();
   const [filters, setFilters] = useState(defaultFilters);
   const [selectedCountry, setSelectedCountry] = useState('US');
   const [selectedState, setSelectedState] = useState('');
@@ -131,6 +131,22 @@ export default function App() {
   useEffect(() => {
     setSelectedSecondLegCode('');
   }, [selectedFirstLegCode]);
+
+  useEffect(() => {
+    if (selectedAirportCode) {
+      loadAirportDetails(selectedAirportCode);
+    }
+  }, [selectedAirportCode, loadAirportDetails]);
+
+  useEffect(() => {
+    const codes = [selectedFirstLegCode];
+    if (selectedSecondLegCode) {
+      codes.push(selectedSecondLegCode);
+    }
+    if (codes.length > 0) {
+      loadAirportDetails(codes);
+    }
+  }, [selectedFirstLegCode, selectedSecondLegCode, loadAirportDetails]);
 
   const handleSelectFirstLeg = (code) => {
     setSelectedFirstLegCode(code);
@@ -324,6 +340,7 @@ export default function App() {
           onSelectSecondLeg={handleSelectSecondLeg}
           onOpenSummary={() => setSummaryOpen(true)}
           airportData={airportData}
+          onRequestAirportDetails={loadAirportDetails}
         />
       </main>
 
@@ -337,6 +354,7 @@ export default function App() {
         open={summaryOpen}
         onClose={() => setSummaryOpen(false)}
         airportData={airportData}
+        loadAirportDetails={loadAirportDetails}
         homeCode={selectedAirportCode}
         firstLegCode={selectedFirstLegCode}
         secondLegCode={selectedSecondLegCode}

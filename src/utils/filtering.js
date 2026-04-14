@@ -23,49 +23,74 @@ export function buildLocationIndex(airportData) {
   };
 }
 
+function deriveRunwaySummaryFromRunways(runways = []) {
+  return runways.reduce((summary, runway) => {
+    const surface = String(runway.surface || '').toUpperCase().split('-')[0];
+    const length = parseInt(runway.length, 10) || 0;
+    const key = ['ASPH', 'CONC', 'TURF'].includes(surface) ? surface : 'OTHER';
+    summary[key] = Math.max(summary[key], length);
+    return summary;
+  }, { ASPH: 0, CONC: 0, TURF: 0, OTHER: 0 });
+}
+
+function getRunwaySummary(airport) {
+  if (airport.runwaySummary) {
+    return {
+      ASPH: Number(airport.runwaySummary.ASPH || 0),
+      CONC: Number(airport.runwaySummary.CONC || 0),
+      TURF: Number(airport.runwaySummary.TURF || 0),
+      OTHER: Number(airport.runwaySummary.OTHER || 0),
+    };
+  }
+
+  return deriveRunwaySummaryFromRunways(Array.isArray(airport.runways) ? airport.runways : []);
+}
+
+function deriveApproachSummaryFromApproaches(approaches = []) {
+  return approaches.reduce((summary, approach) => {
+    const name = String(approach.name || '').toUpperCase();
+    if (name.includes('RNAV')) summary.hasRnav = true;
+    if (name.includes('ILS') || name.includes('LOC')) summary.hasIlsLoc = true;
+    if (name.includes('VOR') || name.includes('NDB')) summary.hasVorNdb = true;
+    summary.count += 1;
+    return summary;
+  }, { count: 0, hasRnav: false, hasIlsLoc: false, hasVorNdb: false });
+}
+
+function getApproachSummary(airport) {
+  if (airport.approachSummary) {
+    return {
+      count: Number(airport.approachSummary.count || 0),
+      hasRnav: Boolean(airport.approachSummary.hasRnav),
+      hasIlsLoc: Boolean(airport.approachSummary.hasIlsLoc),
+      hasVorNdb: Boolean(airport.approachSummary.hasVorNdb),
+    };
+  }
+
+  return deriveApproachSummaryFromApproaches(Array.isArray(airport.approaches) ? airport.approaches : []);
+}
+
 function airportMatchesFilters(airport, filters) {
   if (!filters.airspaces.includes(airport.airspace)) return false;
   if (airport.elevation > filters.maxAirportElev) return false;
   if (filters.mustHaveFuel && airport.fuel === 'None') return false;
 
-  const eligibleRunways = airport.runways.filter((rwy) => {
-    const len = parseInt(rwy.length, 10) || 0;
-    const surface = (rwy.surface || '').toUpperCase().split('-')[0];
-    return (
-      len >= filters.minRunwayLength &&
-      (filters.surfaces.includes(surface) ||
-        (filters.surfaces.includes('OTHER') && !['ASPH', 'CONC', 'TURF'].includes(surface)))
-    );
+  const runwaySummary = getRunwaySummary(airport);
+  const hasEligibleRunway = filters.surfaces.some((surface) => {
+    const maxLength = Number(runwaySummary[surface] || 0);
+    return maxLength >= filters.minRunwayLength;
   });
-  if (eligibleRunways.length === 0) return false;
+  if (!hasEligibleRunway) return false;
 
   if (filters.approaches.length > 0) {
-    const hasApproaches = Array.isArray(airport.approaches) && airport.approaches.length > 0;
-    const isEmptyApproaches = Array.isArray(airport.approaches) && airport.approaches.length === 0;
-    let matchesAnyApproach = false;
-
-    if (hasApproaches) {
-      matchesAnyApproach = filters.approaches.some((approach) => {
-        if (approach === 'RNAV') {
-          return airport.approaches.some((ap) => ap.name.toUpperCase().includes('RNAV'));
-        }
-        if (approach === 'ILS/LOC') {
-          return airport.approaches.some((ap) => {
-            const name = ap.name.toUpperCase();
-            return name.includes('ILS') || name.includes('LOC');
-          });
-        }
-        if (approach === 'VOR/NDB') {
-          return airport.approaches.some((ap) => {
-            const name = ap.name.toUpperCase();
-            return name.includes('VOR') || name.includes('NDB');
-          });
-        }
-        return false;
-      });
-    }
-
-    const matchesNone = isEmptyApproaches && filters.approaches.includes('None');
+    const approachSummary = getApproachSummary(airport);
+    const matchesAnyApproach = filters.approaches.some((approach) => {
+      if (approach === 'RNAV') return approachSummary.hasRnav;
+      if (approach === 'ILS/LOC') return approachSummary.hasIlsLoc;
+      if (approach === 'VOR/NDB') return approachSummary.hasVorNdb;
+      return false;
+    });
+    const matchesNone = approachSummary.count === 0 && filters.approaches.includes('None');
     if (!matchesAnyApproach && !matchesNone) return false;
   }
 

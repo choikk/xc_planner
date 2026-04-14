@@ -60,11 +60,19 @@ export default function HomeBaseSection({
           <div>Airspace: {selectedAirport.airspace}</div>
           <div className="runway-list">
             <strong>Runways</strong>
-            {selectedAirport.runways.map((runway) => (
-              <div key={`${selectedAirport.airport_code}-${runway.rwy_id}`}>
-                {runway.rwy_id}: {runway.length} ft, {runway.surface}, {runway.condition}
-              </div>
-            ))}
+            {selectedAirport.detailsLoaded ? (
+              selectedAirport.runways.length > 0 ? (
+                selectedAirport.runways.map((runway) => (
+                  <div key={`${selectedAirport.airport_code}-${runway.rwy_id}`}>
+                    {runway.rwy_id}: {runway.length} ft, {runway.surface}, {runway.condition}
+                  </div>
+                ))
+              ) : (
+                <div>None</div>
+              )
+            ) : (
+              <div>Loading airport details...</div>
+            )}
           </div>
         </div>
       )}
