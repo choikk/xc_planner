@@ -28,32 +28,59 @@ function buildAirportText({ label, code, airport }) {
   ].join('\n');
 }
 
-async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
-  if (!selectedApproaches.length) {
-    return summaryBlob;
-  }
+function buildApproachPlateFetchUrl(pdfUrl) {
+  return `/.netlify/functions/approach-plate?url=${encodeURIComponent(pdfUrl)}`;
+}
 
-  const summaryDoc = await PDFDocument.load(await summaryBlob.arrayBuffer());
+async function fetchApproachPlateBuffer(pdfUrl) {
+  const candidates = [buildApproachPlateFetchUrl(pdfUrl), pdfUrl];
+  let lastError = null;
 
-  for (const approach of selectedApproaches) {
+  for (const candidateUrl of candidates) {
     try {
-      const response = await fetch(approach.pdfUrl);
+      const response = await fetch(candidateUrl);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
+      return await response.arrayBuffer();
+    } catch (error) {
+      lastError = error;
+    }
+  }
 
-      const approachDoc = await PDFDocument.load(await response.arrayBuffer(), {
+  throw lastError || new Error('Unable to fetch approach plate PDF');
+}
+
+async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
+  if (!selectedApproaches.length) {
+    return {
+      blob: summaryBlob,
+      failedApproaches: [],
+    };
+  }
+
+  const summaryDoc = await PDFDocument.load(await summaryBlob.arrayBuffer());
+  const failedApproaches = [];
+
+  for (const approach of selectedApproaches) {
+    try {
+      const approachBuffer = await fetchApproachPlateBuffer(approach.pdfUrl);
+      const approachDoc = await PDFDocument.load(approachBuffer, {
         ignoreEncryption: true,
       });
       const copiedPages = await summaryDoc.copyPages(approachDoc, approachDoc.getPageIndices());
       copiedPages.forEach((page) => summaryDoc.addPage(page));
     } catch (error) {
+      failedApproaches.push(approach);
       console.warn('[SummaryModal] Failed to append approach plate', approach.pdfUrl, error);
     }
   }
 
   const mergedBytes = await summaryDoc.save();
-  return new Blob([mergedBytes], { type: 'application/pdf' });
+  return {
+    blob: new Blob([mergedBytes], { type: 'application/pdf' }),
+    failedApproaches,
+  };
 }
 
 function escapePdfText(value) {
@@ -335,7 +362,7 @@ function drawCanvasMarker(ctx, x, y, code, isHome) {
   ctx.restore();
 }
 
-async function createRouteMapJpeg(stops, width = 1000, height = 640) {
+async function createRouteMapImageData(stops, width = 1000, height = 640) {
   const validStops = stops.filter(({ airport }) => (
     Number.isFinite(airport?.lat) && Number.isFinite(airport?.lon)
   ));
@@ -425,13 +452,24 @@ async function createRouteMapJpeg(stops, width = 1000, height = 640) {
 
   try {
     return {
-      ...dataUrlToPdfJpeg(canvas.toDataURL('image/jpeg', 0.88)),
+      dataUrl: canvas.toDataURL('image/jpeg', 0.88),
       pixelWidth: width,
       pixelHeight: height,
     };
   } catch (err) {
     return null;
   }
+}
+
+async function createRouteMapJpeg(stops, width = 1000, height = 640) {
+  const imageData = await createRouteMapImageData(stops, width, height);
+  if (!imageData?.dataUrl) return null;
+
+  return {
+    ...dataUrlToPdfJpeg(imageData.dataUrl),
+    pixelWidth: imageData.pixelWidth,
+    pixelHeight: imageData.pixelHeight,
+  };
 }
 
 function drawRouteSketch(pdf, stops, box) {
@@ -791,53 +829,123 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
   return pdf.finalize();
 }
 
-function SummaryPdfViewer({ report, reportKey, selectedApproaches, onDocumentReady }) {
-  const [pdfUrl, setPdfUrl] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    let nextUrl = '';
-
-    setPdfUrl('');
-    onDocumentReady?.(null);
-
-    (async () => {
-      const routeMapImage = await createRouteMapJpeg(report.airportSections);
-      const summaryBlob = buildGraphicalSummaryPdfBlob(report, routeMapImage);
-      const blob = await mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches);
-      const url = URL.createObjectURL(blob);
-      if (!active) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-      nextUrl = url;
-      setPdfUrl(url);
-      onDocumentReady?.(blob);
-    })();
-
-    return () => {
-      active = false;
-      onDocumentReady?.(null);
-      if (nextUrl) URL.revokeObjectURL(nextUrl);
-    };
-  }, [reportKey, onDocumentReady]);
-
-  if (!pdfUrl) {
-    return (
-      <div className="summary-pdf-fallback">
-        {selectedApproaches.length > 0
-          ? `Building PDF with ${selectedApproaches.length} selected approach plate${selectedApproaches.length === 1 ? '' : 's'}...`
-          : 'Building PDF...'}
-      </div>
-    );
-  }
+function SummaryDraftPreview({
+  report,
+  routeMapPreviewUrl,
+  selectedApproachKeys,
+  onToggleApproachSelection,
+  onGeneratePdf,
+  generatingPdf,
+}) {
+  const selectedCount = selectedApproachKeys.length;
 
   return (
-    <iframe
-      className="summary-pdf-viewer"
-      title="Trip Summary PDF"
-      src={pdfUrl}
-    />
+    <div className="summary-draft">
+      <div className="summary-route-row">
+        <section className="summary-airport summary-distances-card">
+          <div className="summary-distances">
+            <strong>Distances</strong>
+            {report.distanceLines.map((distanceLine) => (
+              <div key={distanceLine}>{distanceLine}</div>
+            ))}
+            <div className="summary-total">Total: {report.total.toFixed(1)} NM</div>
+          </div>
+          <p className="summary-advisory">
+            Always review NOTAMs, weather, and current airport conditions before departure.
+          </p>
+        </section>
+
+        <section className="summary-route-map-panel">
+          {routeMapPreviewUrl ? (
+            <img
+              className="summary-route-map"
+              src={routeMapPreviewUrl}
+              alt="Trip route map preview"
+            />
+          ) : (
+            <div className="summary-map-empty">Course map preview will be included in the generated PDF.</div>
+          )}
+        </section>
+      </div>
+
+      <div className="summary-preview-actions">
+        <div className="summary-preview-meta">
+          {selectedCount > 0
+            ? `${selectedCount} approach plate${selectedCount === 1 ? '' : 's'} selected`
+            : 'No approach plates selected'}
+        </div>
+        <button
+          type="button"
+          className="summary-generate-btn"
+          onClick={onGeneratePdf}
+          disabled={generatingPdf}
+        >
+          {generatingPdf ? 'Generating PDF...' : 'Generate PDF'}
+        </button>
+      </div>
+
+      <div className="summary-grid">
+        {report.airportSections.map((section) => {
+          const runways = Array.isArray(section.airport.runways) ? section.airport.runways : [];
+          const approaches = Array.isArray(section.airport.approaches) ? section.airport.approaches : [];
+
+          return (
+            <section key={`${section.label}-${section.code}`} className="summary-airport">
+              <h3>{section.label}: {section.code}</h3>
+              <div className="summary-airport-name">{section.airport.airport_name}</div>
+              <div>{section.airport.city}, {section.airport.state}</div>
+              <div>Elev {section.airport.elevation} ft · Fuel {section.airport.fuel} · Class {section.airport.airspace}</div>
+
+              <div className="summary-runways">
+                <strong>Runways</strong>
+                {runways.length ? runways.map((runway) => (
+                  <div key={`${section.code}-${runway.rwy_id}`}>
+                    {runway.rwy_id}: {runway.length}' x {runway.width}' {formatSurface(runway.surface)} ({runway.condition})
+                  </div>
+                )) : <div>None</div>}
+              </div>
+
+              <div className="summary-approaches">
+                <strong>Instrument Approaches</strong>
+                {approaches.length ? (
+                  <ul className="summary-approach-checklist">
+                    {approaches.map((approach) => {
+                      const approachKey = `${section.code}::${approach.name}`;
+                      const checked = selectedApproachKeys.includes(approachKey);
+                      return (
+                        <li key={approachKey} className="summary-approach-item">
+                          {approach.pdf_url ? (
+                            <label className="summary-approach-check">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => onToggleApproachSelection(approachKey)}
+                              />
+                              <a
+                                href={approach.pdf_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {approach.name}
+                              </a>
+                            </label>
+                          ) : (
+                            <span>{approach.name}</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div>None</div>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -853,17 +961,42 @@ export default function SummaryModal({
 }) {
   const [reportMode, setReportMode] = useState('pdf');
   const [pdfBlob, setPdfBlob] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfMessage, setPdfMessage] = useState('');
+  const [pdfFailures, setPdfFailures] = useState([]);
+  const [routeMapPreviewUrl, setRouteMapPreviewUrl] = useState('');
   const [shareSupported, setShareSupported] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [selectedApproachKeys, setSelectedApproachKeys] = useState([]);
 
+  const resetGeneratedPdf = () => {
+    setPdfBlob(null);
+    setGeneratingPdf(false);
+    setPdfMessage('');
+    setPdfFailures([]);
+    setPdfUrl((currentUrl) => {
+      if (currentUrl) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return '';
+    });
+  };
+
   useEffect(() => {
     if (open) {
       setReportMode('pdf');
-      setPdfBlob(null);
       setSelectedApproachKeys([]);
+      setRouteMapPreviewUrl('');
     }
+    resetGeneratedPdf();
   }, [open, homeCode, firstLegCode, secondLegCode]);
+
+  useEffect(() => () => {
+    if (pdfUrl) {
+      URL.revokeObjectURL(pdfUrl);
+    }
+  }, [pdfUrl]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -989,14 +1122,68 @@ export default function SummaryModal({
     total.toFixed(1),
     ...distanceLines,
     ...airportSections.map((section) => `${section.label}:${section.code}`),
-    ...selectedApproachKeys,
   ].join('|');
   const toggleApproachSelection = (approachKey) => {
+    resetGeneratedPdf();
     setSelectedApproachKeys((current) => (
       current.includes(approachKey)
         ? current.filter((key) => key !== approachKey)
         : [...current, approachKey]
     ));
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      const imageData = await createRouteMapImageData(summaryReport.airportSections);
+      if (active) {
+        setRouteMapPreviewUrl(imageData?.dataUrl || '');
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [reportKey]);
+
+  const handleGeneratePdf = async () => {
+    if (generatingPdf) return;
+
+    resetGeneratedPdf();
+    setGeneratingPdf(true);
+    setPdfMessage(
+      selectedApproaches.length > 0
+        ? `Generating PDF and attaching ${selectedApproaches.length} selected approach plate${selectedApproaches.length === 1 ? '' : 's'}...`
+        : 'Generating PDF...'
+    );
+
+    try {
+      const routeMapImage = await createRouteMapJpeg(summaryReport.airportSections);
+      const summaryBlob = buildGraphicalSummaryPdfBlob(summaryReport, routeMapImage);
+      const { blob, failedApproaches } = await mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches);
+      const nextPdfUrl = URL.createObjectURL(blob);
+      setPdfBlob(blob);
+      setPdfUrl(nextPdfUrl);
+      setPdfFailures(failedApproaches);
+
+      if (failedApproaches.length > 0) {
+        setPdfMessage(
+          `PDF generated, but ${failedApproaches.length} approach plate${failedApproaches.length === 1 ? '' : 's'} could not be appended.`
+        );
+      } else if (selectedApproaches.length > 0) {
+        setPdfMessage(
+          `PDF ready with ${selectedApproaches.length} appended approach plate${selectedApproaches.length === 1 ? '' : 's'}.`
+        );
+      } else {
+        setPdfMessage('PDF ready.');
+      }
+    } catch (error) {
+      console.error('[SummaryModal] Failed to generate summary PDF', error);
+      setPdfMessage('Failed to generate PDF.');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const handleShare = async () => {
@@ -1101,44 +1288,51 @@ export default function SummaryModal({
           >
             ⤴
           </button>
+          {reportMode === 'pdf' && pdfUrl && (
+            <button
+              type="button"
+              className="summary-edit-link"
+              onClick={resetGeneratedPdf}
+            >
+              Edit plates
+            </button>
+          )}
         </div>
-
-        {approachOptions.length > 0 && (
-          <div className="summary-plate-picker">
-            <div className="summary-plate-title">Attach Approach Plates To PDF</div>
-            <div className="summary-plate-hint">
-              Select approach plates to append as extra pages after the trip summary when printing or downloading the PDF.
-            </div>
-            <div className="summary-plate-list">
-              {approachOptions.map((approach) => (
-                <label key={approach.key} className="summary-plate-option">
-                  <input
-                    type="checkbox"
-                    checked={selectedApproachKeys.includes(approach.key)}
-                    onChange={() => toggleApproachSelection(approach.key)}
-                  />
-                  <span>
-                    <strong>{approach.airportLabel}</strong>
-                    <span>{approach.approachName}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="summary-content-shell">
           {reportMode === 'text' ? (
             <textarea className="summary-text-report" value={summaryText} readOnly />
+          ) : pdfUrl ? (
+            <iframe
+              className="summary-pdf-viewer"
+              title="Trip Summary PDF"
+              src={pdfUrl}
+            />
           ) : (
-            <SummaryPdfViewer
+            <SummaryDraftPreview
               report={summaryReport}
-              reportKey={reportKey}
-              selectedApproaches={selectedApproaches}
-              onDocumentReady={setPdfBlob}
+              routeMapPreviewUrl={routeMapPreviewUrl}
+              selectedApproachKeys={selectedApproachKeys}
+              onToggleApproachSelection={toggleApproachSelection}
+              onGeneratePdf={handleGeneratePdf}
+              generatingPdf={generatingPdf}
             />
           )}
         </div>
+        {reportMode === 'pdf' && pdfMessage && (
+          <div className={`summary-status${pdfFailures.length ? ' summary-status-warning' : ''}`}>
+            {pdfMessage}
+          </div>
+        )}
+        {reportMode === 'pdf' && pdfFailures.length > 0 && (
+          <div className="summary-failure-list">
+            {pdfFailures.map((approach) => (
+              <div key={`failed-${approach.key}`}>
+                Could not append {approach.airportCode} {approach.approachName}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
