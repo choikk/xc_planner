@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { haversine, formatSurface } from '../utils/geo';
 
 function buildAirportText({ label, code, airport }) {
@@ -873,12 +873,13 @@ export default function SummaryModal({
   const leg3 = second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1;
   const total = second ? leg1 + leg2 + leg3 : leg1 * 2;
 
-  const airportSections = [
+  const airportSections = useMemo(() => ([
     { label: 'Home Base', code: homeCode, airport: home },
     { label: 'First Destination', code: firstLegCode, airport: first },
     second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
-  ].filter(Boolean);
-  const distanceLines = [
+  ].filter(Boolean)), [homeCode, home, firstLegCode, first, secondLegCode, second]);
+
+  const distanceLines = useMemo(() => ([
     `${homeCode} -> ${firstLegCode}: ${leg1.toFixed(1)} NM`,
     tripType === 'two' && secondLegCode
       ? `${firstLegCode} -> ${secondLegCode}: ${leg2.toFixed(1)} NM`
@@ -886,32 +887,44 @@ export default function SummaryModal({
     tripType === 'two' && secondLegCode
       ? `${secondLegCode} -> ${homeCode}: ${leg3.toFixed(1)} NM`
       : null,
-  ].filter(Boolean);
-  const routeName = [...airportSections.map(({ code }) => code), homeCode].join(' -> ');
-  const sectionDivider = '------------------------------';
-  const summaryText = [
-    'Cross Country Trip Summary',
-    '',
-    `Course: ${routeName}`,
-    `Total: ${total.toFixed(1)} NM`,
-    '',
-    'Leg Distances:',
-    ...distanceLines,
-    '',
-    ...airportSections.flatMap((section) => [
-      sectionDivider,
+  ].filter(Boolean)), [homeCode, firstLegCode, secondLegCode, tripType, leg1, leg2, leg3]);
+
+  const routeName = useMemo(
+    () => [...airportSections.map(({ code }) => code), homeCode].join(' -> '),
+    [airportSections, homeCode]
+  );
+
+  const summaryText = useMemo(() => {
+    const sectionDivider = '------------------------------';
+    return [
+      'Cross Country Trip Summary',
       '',
-      buildAirportText(section),
+      `Course: ${routeName}`,
+      `Total: ${total.toFixed(1)} NM`,
       '',
-    ]),
-  ].join('\n');
-  const summaryReport = {
+      'Leg Distances:',
+      ...distanceLines,
+      '',
+      ...airportSections.flatMap((section) => [
+        sectionDivider,
+        '',
+        buildAirportText(section),
+        '',
+      ]),
+    ].join('\n');
+  }, [routeName, total, distanceLines, airportSections]);
+
+  const summaryReport = useMemo(() => ({
     airportSections,
     distanceLines,
     routeName,
     total,
-  };
-  const fileBaseName = routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary';
+  }), [airportSections, distanceLines, routeName, total]);
+
+  const fileBaseName = useMemo(
+    () => routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary',
+    [routeName]
+  );
 
   const handleShare = async () => {
     if (!shareSupported || sharing) return;
