@@ -1,3 +1,4 @@
+import { PDFDocument } from 'pdf-lib';
 import { useEffect, useState } from 'react';
 import { haversine, formatSurface } from '../utils/geo';
 
@@ -25,6 +26,34 @@ function buildAirportText({ label, code, airport }) {
     'Instrument Approaches:',
     ...approaches,
   ].join('\n');
+}
+
+async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
+  if (!selectedApproaches.length) {
+    return summaryBlob;
+  }
+
+  const summaryDoc = await PDFDocument.load(await summaryBlob.arrayBuffer());
+
+  for (const approach of selectedApproaches) {
+    try {
+      const response = await fetch(approach.pdfUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const approachDoc = await PDFDocument.load(await response.arrayBuffer(), {
+        ignoreEncryption: true,
+      });
+      const copiedPages = await summaryDoc.copyPages(approachDoc, approachDoc.getPageIndices());
+      copiedPages.forEach((page) => summaryDoc.addPage(page));
+    } catch (error) {
+      console.warn('[SummaryModal] Failed to append approach plate', approach.pdfUrl, error);
+    }
+  }
+
+  const mergedBytes = await summaryDoc.save();
+  return new Blob([mergedBytes], { type: 'application/pdf' });
 }
 
 function escapePdfText(value) {
@@ -720,6 +749,15 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
       color: '30 41 59',
     });
   });
+  const advisoryLines = useCompactLayout
+    ? ['Always review NOTAMs, weather, and airport', 'conditions before departure.']
+    : ['Always review NOTAMs, weather, and current airport conditions before departure.'];
+  advisoryLines.forEach((lineText, index) => {
+    pdf.text(left + 4, distanceBoxY - 14 - (index * 10), lineText, {
+      size: useCompactLayout ? 7 : 7.8,
+      color: '100 116 139',
+    });
+  });
 
   const mapBox = {
     x: 318,
@@ -753,7 +791,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
   return pdf.finalize();
 }
 
-function SummaryPdfViewer({ report, reportKey, onDocumentReady }) {
+function SummaryPdfViewer({ report, reportKey, selectedApproaches, onDocumentReady }) {
   const [pdfUrl, setPdfUrl] = useState('');
 
   useEffect(() => {
@@ -765,7 +803,8 @@ function SummaryPdfViewer({ report, reportKey, onDocumentReady }) {
 
     (async () => {
       const routeMapImage = await createRouteMapJpeg(report.airportSections);
-      const blob = buildGraphicalSummaryPdfBlob(report, routeMapImage);
+      const summaryBlob = buildGraphicalSummaryPdfBlob(report, routeMapImage);
+      const blob = await mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches);
       const url = URL.createObjectURL(blob);
       if (!active) {
         URL.revokeObjectURL(url);
@@ -783,7 +822,15 @@ function SummaryPdfViewer({ report, reportKey, onDocumentReady }) {
     };
   }, [reportKey, onDocumentReady]);
 
-  if (!pdfUrl) return <div className="summary-pdf-fallback">Building PDF...</div>;
+  if (!pdfUrl) {
+    return (
+      <div className="summary-pdf-fallback">
+        {selectedApproaches.length > 0
+          ? `Building PDF with ${selectedApproaches.length} selected approach plate${selectedApproaches.length === 1 ? '' : 's'}...`
+          : 'Building PDF...'}
+      </div>
+    );
+  }
 
   return (
     <iframe
@@ -808,11 +855,13 @@ export default function SummaryModal({
   const [pdfBlob, setPdfBlob] = useState(null);
   const [shareSupported, setShareSupported] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [selectedApproachKeys, setSelectedApproachKeys] = useState([]);
 
   useEffect(() => {
     if (open) {
       setReportMode('pdf');
       setPdfBlob(null);
+      setSelectedApproachKeys([]);
     }
   }, [open, homeCode, firstLegCode, secondLegCode]);
 
@@ -921,6 +970,18 @@ export default function SummaryModal({
     routeName,
     total,
   };
+  const approachOptions = airportSections.flatMap((section) => (
+    (Array.isArray(section.airport.approaches) ? section.airport.approaches : [])
+      .filter((approach) => approach?.pdf_url)
+      .map((approach) => ({
+        key: `${section.code}::${approach.name}`,
+        airportCode: section.code,
+        airportLabel: `${section.label}: ${section.code}`,
+        approachName: approach.name,
+        pdfUrl: approach.pdf_url,
+      }))
+  ));
+  const selectedApproaches = approachOptions.filter((approach) => selectedApproachKeys.includes(approach.key));
 
   const fileBaseName = routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary';
   const reportKey = [
@@ -928,7 +989,15 @@ export default function SummaryModal({
     total.toFixed(1),
     ...distanceLines,
     ...airportSections.map((section) => `${section.label}:${section.code}`),
+    ...selectedApproachKeys,
   ].join('|');
+  const toggleApproachSelection = (approachKey) => {
+    setSelectedApproachKeys((current) => (
+      current.includes(approachKey)
+        ? current.filter((key) => key !== approachKey)
+        : [...current, approachKey]
+    ));
+  };
 
   const handleShare = async () => {
     if (sharing) return;
@@ -1034,11 +1103,40 @@ export default function SummaryModal({
           </button>
         </div>
 
+        {approachOptions.length > 0 && (
+          <div className="summary-plate-picker">
+            <div className="summary-plate-title">Attach Approach Plates To PDF</div>
+            <div className="summary-plate-hint">
+              Select approach plates to append as extra pages after the trip summary when printing or downloading the PDF.
+            </div>
+            <div className="summary-plate-list">
+              {approachOptions.map((approach) => (
+                <label key={approach.key} className="summary-plate-option">
+                  <input
+                    type="checkbox"
+                    checked={selectedApproachKeys.includes(approach.key)}
+                    onChange={() => toggleApproachSelection(approach.key)}
+                  />
+                  <span>
+                    <strong>{approach.airportLabel}</strong>
+                    <span>{approach.approachName}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="summary-content-shell">
           {reportMode === 'text' ? (
             <textarea className="summary-text-report" value={summaryText} readOnly />
           ) : (
-            <SummaryPdfViewer report={summaryReport} reportKey={reportKey} onDocumentReady={setPdfBlob} />
+            <SummaryPdfViewer
+              report={summaryReport}
+              reportKey={reportKey}
+              selectedApproaches={selectedApproaches}
+              onDocumentReady={setPdfBlob}
+            />
           )}
         </div>
       </div>

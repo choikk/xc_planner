@@ -605,6 +605,51 @@ details { margin-bottom: .65rem; }
   min-height: 520px;
 }
 
+.summary-plate-picker {
+  margin: 0 0 1rem;
+  padding: .8rem .9rem;
+  border: 1px solid #d7e0ea;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.summary-plate-title {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.summary-plate-hint {
+  margin-top: .3rem;
+  color: #64748b;
+  font-size: .84rem;
+  line-height: 1.35;
+}
+
+.summary-plate-list {
+  margin-top: .7rem;
+  display: grid;
+  gap: .45rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.summary-plate-option {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.summary-plate-option input {
+  margin-top: .18rem;
+}
+
+.summary-plate-option span {
+  display: grid;
+  gap: .08rem;
+}
+
 .summary-text-report {
   width: 100%;
   height: 100%;
