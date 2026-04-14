@@ -1122,6 +1122,11 @@ export default function SummaryModal({
   };
 
   useEffect(() => {
+    if (!open || reportMode !== 'pdf') {
+      setRouteMapPreviewUrl('');
+      return undefined;
+    }
+
     let active = true;
 
     (async () => {
@@ -1134,7 +1139,7 @@ export default function SummaryModal({
     return () => {
       active = false;
     };
-  }, [reportKey]);
+  }, [open, reportMode, reportKey]);
 
   const handleGeneratePdf = async () => {
     if (generatingPdf) return;
