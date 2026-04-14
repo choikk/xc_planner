@@ -67,10 +67,11 @@ async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
       for (let pageIndex = 0; pageIndex < approachDoc.getPageCount(); pageIndex += 1) {
         const [embeddedPage] = await summaryDoc.embedPdf(approachBuffer, [pageIndex]);
         const targetPage = summaryDoc.addPage([letterWidth, letterHeight]);
-        const scale = Math.min(
+        const fitScale = Math.min(
           (letterWidth - (pageMargin * 2)) / embeddedPage.width,
           (letterHeight - (pageMargin * 2)) / embeddedPage.height
         );
+        const scale = Math.min(1, fitScale);
         const drawWidth = embeddedPage.width * scale;
         const drawHeight = embeddedPage.height * scale;
         const drawX = (letterWidth - drawWidth) / 2;
@@ -760,37 +761,37 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
   const left = 42;
   const right = 570;
   const fullWidth = right - left;
-  const stackedTop = 535;
-  const compactTop = 568;
+  const stackedTop = 500;
+  const compactTop = 530;
   const useCompactLayout = !fitsSinglePageStack(report.airportSections, stackedTop, fullWidth, false);
   const compactPlacements = useCompactLayout
     ? buildColumnPlacements(report.airportSections, compactTop, left, right)
     : null;
   const singlePageCompact = Boolean(compactPlacements);
-  const titleTop = useCompactLayout ? 752 : 748;
+  const titleTop = useCompactLayout ? 760 : 758;
 
   pdf.text(left, titleTop, 'Cross Country Trip Summary', {
     font: 'F2',
     size: useCompactLayout ? 20 : 22,
     color: '17 24 39',
   });
-  pdf.text(left, titleTop - 17, GENERATED_BY_LINE, {
-    size: useCompactLayout ? 7.8 : 8.5,
+  pdf.text(left, titleTop - 16, GENERATED_BY_LINE, {
+    size: useCompactLayout ? 7.5 : 8,
     color: '100 116 139',
   });
-  pdf.text(left, titleTop - 31, report.routeName, {
+  pdf.text(left, titleTop - 34, report.routeName, {
     font: 'F2',
-    size: useCompactLayout ? 11 : 12,
+    size: useCompactLayout ? 14 : 16,
     color: '37 99 235',
   });
-  pdf.text(left, titleTop - 48, `Total ${report.total.toFixed(1)} NM`, {
+  pdf.text(left, titleTop - 54, `Total ${report.total.toFixed(1)} NM`, {
     font: 'F2',
-    size: useCompactLayout ? 13 : 15,
+    size: useCompactLayout ? 12 : 14,
     color: '17 24 39',
   });
 
-  const distanceBoxY = useCompactLayout ? 620 : 602;
-  const distanceBoxHeight = useCompactLayout ? 82 : 100;
+  const distanceBoxY = useCompactLayout ? 585 : 560;
+  const distanceBoxHeight = useCompactLayout ? 80 : 96;
   pdf.rect(left, distanceBoxY, 245, distanceBoxHeight, { fill: '239 246 255', stroke: '147 197 253' });
   pdf.text(left + 12, distanceBoxY + distanceBoxHeight - 24, 'DISTANCES', {
     font: 'F2',
@@ -816,9 +817,9 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
 
   const mapBox = {
     x: 318,
-    y: useCompactLayout ? 606 : 570,
+    y: useCompactLayout ? 575 : 550,
     width: 232,
-    height: useCompactLayout ? 110 : 150,
+    height: useCompactLayout ? 108 : 130,
   };
   if (routeMapImage) {
     pdf.rect(mapBox.x, mapBox.y, mapBox.width, mapBox.height, { fill: '239 246 255', stroke: '148 163 184' });
