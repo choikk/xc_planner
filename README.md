@@ -2,6 +2,18 @@
 
 XC Planner v2 is a React/Vite cross-country flight planning app for U.S. general aviation use. It centers on a home-base workflow: pick a departure airport, explore round-trip or triangle-trip candidates on the map, filter by runway and airspace constraints, and generate printable trip summaries.
 
+## What's New
+
+- Rebuilt the planner as a React/Vite app with a cleaner, faster v2 codebase
+- Replaced the old bundled JSON-data workflow with a database-backed airport pipeline and Netlify function endpoint
+- Reworked the trip workflow so map candidates update immediately when filters or trip options change
+- Added a more guided home-base-first planning flow for round trips and triangle trips
+- Added persistent home base selection in the same browser
+- Added better visual separation between selectable destinations, filtered-out airports, and airports just outside the first-leg max range
+- Improved mobile behavior and panel organization with dedicated Plan / Filters / Results sections
+- Restored and upgraded the summary experience with PDF and text report views, route map snapshots, and linked instrument approaches
+- Simplified the repository by removing old legacy frontend files that are no longer used in v2
+
 ## Current Scope
 
 - Home base airport selection with same-browser persistence
