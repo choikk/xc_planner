@@ -11,6 +11,7 @@ export default function BottomSheet({ state, setState, children }) {
   const startY = useRef(0);
   const pointerId = useRef(null);
   const startHeight = useRef(heightByState[state]);
+  const lastExpandedState = useRef(state === 'collapsed' ? 'half' : state);
   const [dragging, setDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
 
@@ -21,6 +22,12 @@ export default function BottomSheet({ state, setState, children }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [setState]);
+
+  useEffect(() => {
+    if (state !== 'collapsed') {
+      lastExpandedState.current = state;
+    }
+  }, [state]);
 
   const onPointerDown = (event) => {
     pointerId.current = event.pointerId;
@@ -61,6 +68,15 @@ export default function BottomSheet({ state, setState, children }) {
     setDragOffset(0);
   };
 
+  const toggleSheetState = () => {
+    if (state === 'collapsed') {
+      setState(lastExpandedState.current || 'half');
+      return;
+    }
+
+    setState('collapsed');
+  };
+
   return (
     <div
       className={`bottom-sheet ${state} ${dragging ? 'dragging' : ''}`}
@@ -76,16 +92,9 @@ export default function BottomSheet({ state, setState, children }) {
         <div className="sheet-handle" />
       </div>
       <div className="sheet-actions">
-        {order.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={state === option ? 'active' : ''}
-            onClick={() => setState(option)}
-          >
-            {option}
-          </button>
-        ))}
+        <button type="button" className="sheet-toggle-link" onClick={toggleSheetState}>
+          {state === 'collapsed' ? 'Expand' : 'Collapse'}
+        </button>
       </div>
       <div className="bottom-sheet-content">{children}</div>
     </div>

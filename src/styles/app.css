@@ -345,8 +345,7 @@ details { margin-bottom: .65rem; }
 .sort-row,
 .action-row,
 .footer-actions,
-.modal-header,
-.sheet-actions {
+.modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -820,13 +819,20 @@ details { margin-bottom: .65rem; }
   }
 
   .sheet-actions {
-    padding: 0 1rem .75rem;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 .95rem .45rem;
+    min-height: 20px;
   }
 
-  .sheet-actions button.active {
-    background: #2563eb;
-    color: white;
-    border-color: #2563eb;
+  .sheet-toggle-link {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #475569;
+    font-size: .82rem;
+    font-weight: 600;
+    line-height: 1;
   }
 
   .bottom-sheet-content {
