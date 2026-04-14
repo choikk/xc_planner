@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { haversine, formatSurface } from '../utils/geo';
 
 function buildAirportText({ label, code, airport }) {
@@ -753,7 +753,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
   return pdf.finalize();
 }
 
-function SummaryPdfViewer({ report, onDocumentReady }) {
+function SummaryPdfViewer({ report, reportKey, onDocumentReady }) {
   const [pdfUrl, setPdfUrl] = useState('');
 
   useEffect(() => {
@@ -781,7 +781,7 @@ function SummaryPdfViewer({ report, onDocumentReady }) {
       onDocumentReady?.(null);
       if (nextUrl) URL.revokeObjectURL(nextUrl);
     };
-  }, [report, onDocumentReady]);
+  }, [reportKey, onDocumentReady]);
 
   if (!pdfUrl) return <div className="summary-pdf-fallback">Building PDF...</div>;
 
@@ -863,13 +863,13 @@ export default function SummaryModal({
   const leg3 = hasRequiredAirports ? (second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1) : 0;
   const total = second ? leg1 + leg2 + leg3 : leg1 * 2;
 
-  const airportSections = useMemo(() => ([
+  const airportSections = [
     { label: 'Home Base', code: homeCode, airport: home },
     { label: 'First Destination', code: firstLegCode, airport: first },
     second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
-  ].filter(Boolean)), [homeCode, home, firstLegCode, first, secondLegCode, second]);
+  ].filter(Boolean);
 
-  const distanceLines = useMemo(() => ([
+  const distanceLines = [
     `${homeCode} -> ${firstLegCode}: ${leg1.toFixed(1)} NM`,
     tripType === 'two' && secondLegCode
       ? `${firstLegCode} -> ${secondLegCode}: ${leg2.toFixed(1)} NM`
@@ -877,44 +877,42 @@ export default function SummaryModal({
     tripType === 'two' && secondLegCode
       ? `${secondLegCode} -> ${homeCode}: ${leg3.toFixed(1)} NM`
       : null,
-  ].filter(Boolean)), [homeCode, firstLegCode, secondLegCode, tripType, leg1, leg2, leg3]);
+  ].filter(Boolean);
 
-  const routeName = useMemo(
-    () => [...airportSections.map(({ code }) => code), homeCode].join(' -> '),
-    [airportSections, homeCode]
-  );
+  const routeName = [...airportSections.map(({ code }) => code), homeCode].join(' -> ');
 
-  const summaryText = useMemo(() => {
-    const sectionDivider = '------------------------------';
-    return [
-      'Cross Country Trip Summary',
+  const sectionDivider = '------------------------------';
+  const summaryText = [
+    'Cross Country Trip Summary',
+    '',
+    `Course: ${routeName}`,
+    `Total: ${total.toFixed(1)} NM`,
+    '',
+    'Leg Distances:',
+    ...distanceLines,
+    '',
+    ...airportSections.flatMap((section) => [
+      sectionDivider,
       '',
-      `Course: ${routeName}`,
-      `Total: ${total.toFixed(1)} NM`,
+      buildAirportText(section),
       '',
-      'Leg Distances:',
-      ...distanceLines,
-      '',
-      ...airportSections.flatMap((section) => [
-        sectionDivider,
-        '',
-        buildAirportText(section),
-        '',
-      ]),
-    ].join('\n');
-  }, [routeName, total, distanceLines, airportSections]);
+    ]),
+  ].join('\n');
 
-  const summaryReport = useMemo(() => ({
+  const summaryReport = {
     airportSections,
     distanceLines,
     routeName,
     total,
-  }), [airportSections, distanceLines, routeName, total]);
+  };
 
-  const fileBaseName = useMemo(
-    () => routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary',
-    [routeName]
-  );
+  const fileBaseName = routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary';
+  const reportKey = [
+    routeName,
+    total.toFixed(1),
+    ...distanceLines,
+    ...airportSections.map((section) => `${section.label}:${section.code}`),
+  ].join('|');
 
   if (!hasRequiredSelection) return null;
   if (!hasRequiredAirports) return null;
@@ -1013,7 +1011,7 @@ export default function SummaryModal({
         {reportMode === 'text' ? (
           <textarea className="summary-text-report" value={summaryText} readOnly />
         ) : (
-          <SummaryPdfViewer report={summaryReport} onDocumentReady={setPdfBlob} />
+          <SummaryPdfViewer report={summaryReport} reportKey={reportKey} onDocumentReady={setPdfBlob} />
         )}
       </div>
     </div>
