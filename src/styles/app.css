@@ -38,6 +38,10 @@ select optgroup {
   position: relative;
 }
 
+.mobile-map-title {
+  display: none;
+}
+
 .map-canvas {
   width: 100%;
   height: 100vh;
@@ -738,6 +742,42 @@ details { margin-bottom: .65rem; }
   }
 
   .mobile-only { display: block; }
+
+  .mobile-map-title {
+    display: block;
+    position: absolute;
+    top: 10px;
+    left: 58px;
+    right: min(52vw, 228px);
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  .mobile-map-title .title-block {
+    margin: 0;
+    padding: .4rem .55rem;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.86);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .08);
+    pointer-events: auto;
+  }
+
+  .mobile-map-title .title-block h1 {
+    font-size: 1.05rem;
+    line-height: 1.05;
+    gap: .38rem;
+  }
+
+  .mobile-map-title .title-mark {
+    font-size: .92rem;
+  }
+
+  .mobile-map-title .subtle-line {
+    margin-top: .2rem;
+    font-size: .74rem;
+    line-height: 1.15;
+  }
 
   .bottom-sheet {
     display: flex;

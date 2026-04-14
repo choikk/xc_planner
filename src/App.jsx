@@ -176,43 +176,44 @@ export default function App() {
     setSummaryOpen(false);
   };
 
-  const panelHeader = (
-    <>
-      <div className="title-block">
-        <h1
-          className="title-heading-button"
-          role="button"
-          tabIndex={0}
-          title="Click for credits"
-          onClick={() => setCreditsOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              setCreditsOpen(true);
-            }
-          }}
+  const titleBlock = (
+    <div className="title-block">
+      <h1
+        className="title-heading-button"
+        role="button"
+        tabIndex={0}
+        title="Click for credits"
+        onClick={() => setCreditsOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setCreditsOpen(true);
+          }
+        }}
+      >
+        <span className="title-mark">🛫</span>
+        <span className="title-text">Cross Country Flight Planner</span>
+      </h1>
+      <div className="subtle-line">App version: {APP_VERSION}</div>
+      <div className="subtle-line">FAA Database as of: {databaseVersion}</div>
+    </div>
+  );
+
+  const tabsBlock = (
+    <div className="panel-tabs" role="tablist" aria-label="Planner sections">
+      {panelTabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={activePanelTab === tab.id}
+          className={`panel-tab-btn ${activePanelTab === tab.id ? 'active' : ''}`}
+          onClick={() => setActivePanelTab(tab.id)}
         >
-          <span className="title-mark">🛫</span>
-          <span className="title-text">Cross Country Flight Planner</span>
-        </h1>
-        <div className="subtle-line">App version: {APP_VERSION}</div>
-        <div className="subtle-line">FAA Database as of: {databaseVersion}</div>
-      </div>
-      <div className="panel-tabs" role="tablist" aria-label="Planner sections">
-        {panelTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activePanelTab === tab.id}
-            className={`panel-tab-btn ${activePanelTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActivePanelTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-    </>
+          {tab.label}
+        </button>
+      ))}
+    </div>
   );
 
   const panelFooter = (
@@ -230,7 +231,8 @@ export default function App() {
 
   const desktopPanel = (
     <>
-      {panelHeader}
+      {titleBlock}
+      {tabsBlock}
       {activePanelTab === 'plan' && (
         <>
           <HomeBaseSection
@@ -273,7 +275,7 @@ export default function App() {
 
   const mobilePanel = (
     <>
-      {panelHeader}
+      {tabsBlock}
       {activePanelTab === 'plan' && (
         <>
           <HomeBaseSection
@@ -326,6 +328,9 @@ export default function App() {
     <div className="app-shell">
       <aside className="desktop-sidebar">{desktopPanel}</aside>
       <main className="map-shell">
+        <div className="mobile-map-title">
+          {titleBlock}
+        </div>
         <MapView
           homeAirport={selectedAirportWithCode}
           filters={filters}
