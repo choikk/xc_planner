@@ -846,31 +846,21 @@ export default function SummaryModal({
     loadAirportDetails?.(codes);
   }, [open, homeCode, firstLegCode, secondLegCode, tripType, loadAirportDetails]);
 
-  if (!open || !homeCode || !firstLegCode) return null;
-
   const home = airportData[homeCode];
   const first = airportData[firstLegCode];
   const second = secondLegCode ? airportData[secondLegCode] : null;
-  if (!home || !first) return null;
-  if (!home.detailsLoaded || !first.detailsLoaded || (tripType === 'two' && secondLegCode && !second?.detailsLoaded)) {
-    return (
-      <div className="modal-backdrop" onClick={onClose}>
-        <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2>Trip Summary</h2>
-            <button type="button" className="icon-btn" onClick={onClose}>
-              ✕
-            </button>
-          </div>
-          <div className="summary-pdf-fallback">Loading detailed airport info...</div>
-        </div>
-      </div>
-    );
-  }
+  const hasRequiredSelection = Boolean(open && homeCode && firstLegCode);
+  const hasRequiredAirports = Boolean(home && first);
+  const detailsReady = Boolean(
+    hasRequiredAirports &&
+    home.detailsLoaded &&
+    first.detailsLoaded &&
+    !(tripType === 'two' && secondLegCode && !second?.detailsLoaded)
+  );
 
-  const leg1 = haversine(home.lat, home.lon, first.lat, first.lon);
-  const leg2 = second ? haversine(first.lat, first.lon, second.lat, second.lon) : 0;
-  const leg3 = second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1;
+  const leg1 = hasRequiredAirports ? haversine(home.lat, home.lon, first.lat, first.lon) : 0;
+  const leg2 = hasRequiredAirports && second ? haversine(first.lat, first.lon, second.lat, second.lon) : 0;
+  const leg3 = hasRequiredAirports ? (second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1) : 0;
   const total = second ? leg1 + leg2 + leg3 : leg1 * 2;
 
   const airportSections = useMemo(() => ([
@@ -925,6 +915,24 @@ export default function SummaryModal({
     () => routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary',
     [routeName]
   );
+
+  if (!hasRequiredSelection) return null;
+  if (!hasRequiredAirports) return null;
+  if (!detailsReady) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>Trip Summary</h2>
+            <button type="button" className="icon-btn" onClick={onClose}>
+              ✕
+            </button>
+          </div>
+          <div className="summary-pdf-fallback">Loading detailed airport info...</div>
+        </div>
+      </div>
+    );
+  }
 
   const handleShare = async () => {
     if (!shareSupported || sharing) return;
