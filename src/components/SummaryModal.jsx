@@ -823,11 +823,7 @@ function SummaryDraftPreview({
   routeMapPreviewUrl,
   selectedApproachKeys,
   onToggleApproachSelection,
-  onGeneratePdf,
-  generatingPdf,
 }) {
-  const selectedCount = selectedApproachKeys.length;
-
   return (
     <div className="summary-draft">
       <div className="summary-route-row">
@@ -855,22 +851,6 @@ function SummaryDraftPreview({
             <div className="summary-map-empty">Course map preview will be included in the generated PDF.</div>
           )}
         </section>
-      </div>
-
-      <div className="summary-preview-actions">
-        <div className="summary-preview-meta">
-          {selectedCount > 0
-            ? `${selectedCount} approach plate${selectedCount === 1 ? '' : 's'} selected`
-            : 'No approach plates selected'}
-        </div>
-        <button
-          type="button"
-          className="summary-generate-btn"
-          onClick={onGeneratePdf}
-          disabled={generatingPdf}
-        >
-          {generatingPdf ? 'Generating PDF...' : 'Generate PDF'}
-        </button>
       </div>
 
       <div className="summary-grid">
@@ -1104,6 +1084,7 @@ export default function SummaryModal({
       }))
   ));
   const selectedApproaches = approachOptions.filter((approach) => selectedApproachKeys.includes(approach.key));
+  const selectedApproachCount = selectedApproaches.length;
 
   const fileBaseName = routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary';
   const reportKey = [
@@ -1282,16 +1263,35 @@ export default function SummaryModal({
           >
             ⤴
           </button>
-          {reportMode === 'pdf' && pdfUrl && (
-            <button
-              type="button"
-              className="summary-edit-link"
-              onClick={resetGeneratedPdf}
-            >
-              Edit plates
-            </button>
-          )}
         </div>
+        {reportMode === 'pdf' && (
+          <div className="summary-preview-actions">
+            <div className="summary-preview-meta">
+              {selectedApproachCount > 0
+                ? `${selectedApproachCount} approach plate${selectedApproachCount === 1 ? '' : 's'} selected`
+                : 'No approach plates selected'}
+            </div>
+            <div className="summary-preview-buttons">
+              {pdfUrl && (
+                <button
+                  type="button"
+                  className="summary-edit-link"
+                  onClick={resetGeneratedPdf}
+                >
+                  Edit plates
+                </button>
+              )}
+              <button
+                type="button"
+                className="summary-generate-btn"
+                onClick={handleGeneratePdf}
+                disabled={generatingPdf}
+              >
+                {generatingPdf ? 'Generating PDF...' : 'Generate PDF'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="summary-content-shell">
           {reportMode === 'text' ? (
@@ -1308,8 +1308,6 @@ export default function SummaryModal({
               routeMapPreviewUrl={routeMapPreviewUrl}
               selectedApproachKeys={selectedApproachKeys}
               onToggleApproachSelection={toggleApproachSelection}
-              onGeneratePdf={handleGeneratePdf}
-              generatingPdf={generatingPdf}
             />
           )}
         </div>

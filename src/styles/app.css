@@ -742,12 +742,18 @@ details { margin-bottom: .65rem; }
   align-items: center;
   justify-content: space-between;
   gap: .75rem;
-  margin: .9rem 0 1rem;
+  margin: 0 0 1rem;
 }
 
 .summary-preview-meta {
   color: #64748b;
   font-size: .92rem;
+}
+
+.summary-preview-buttons {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
 }
 
 .summary-generate-btn,
@@ -985,6 +991,15 @@ details { margin-bottom: .65rem; }
   .summary-preview-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .summary-preview-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .summary-preview-buttons > * {
+    width: 100%;
   }
 }
 
