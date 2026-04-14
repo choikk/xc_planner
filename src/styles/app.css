@@ -566,6 +566,16 @@ details { margin-bottom: .65rem; }
   margin: .75rem 0 1rem;
 }
 
+.summary-title-block h2 {
+  margin: 0;
+}
+
+.summary-generated-by {
+  margin-top: .2rem;
+  color: #64748b;
+  font-size: .88rem;
+}
+
 .summary-view-toggle {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -743,6 +753,7 @@ details { margin-bottom: .65rem; }
   justify-content: space-between;
   gap: .75rem;
   margin: 0 0 1rem;
+  min-height: 48px;
 }
 
 .summary-preview-meta {
@@ -754,6 +765,12 @@ details { margin-bottom: .65rem; }
   display: flex;
   align-items: center;
   gap: .55rem;
+}
+
+.summary-preview-spacer {
+  display: inline-block;
+  min-width: 160px;
+  min-height: 40px;
 }
 
 .summary-generate-btn,
@@ -1000,6 +1017,10 @@ details { margin-bottom: .65rem; }
 
   .summary-preview-buttons > * {
     width: 100%;
+  }
+
+  .summary-preview-spacer {
+    min-width: 0;
   }
 }
 
