@@ -1,0 +1,39 @@
+name: Update airport database
+
+on:
+  schedule:
+    - cron: "18 8 * * 5"
+  workflow_dispatch:
+
+concurrency:
+  group: update-airport-database
+  cancel-in-progress: false
+
+jobs:
+  update-airports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend_scripts/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend_scripts/requirements.txt
+
+      - name: Run airport database update
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: python backend_scripts/xc_airport_db.py
