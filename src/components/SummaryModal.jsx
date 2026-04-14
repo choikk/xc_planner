@@ -29,26 +29,15 @@ function buildAirportText({ label, code, airport }) {
 }
 
 function buildApproachPlateFetchUrl(pdfUrl) {
-  return `/.netlify/functions/approach-plate?url=${encodeURIComponent(pdfUrl)}`;
+  return `/.netlify/functions/airport-data?plateUrl=${encodeURIComponent(pdfUrl)}`;
 }
 
 async function fetchApproachPlateBuffer(pdfUrl) {
-  const candidates = [buildApproachPlateFetchUrl(pdfUrl), pdfUrl];
-  let lastError = null;
-
-  for (const candidateUrl of candidates) {
-    try {
-      const response = await fetch(candidateUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return await response.arrayBuffer();
-    } catch (error) {
-      lastError = error;
-    }
+  const response = await fetch(buildApproachPlateFetchUrl(pdfUrl));
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
   }
-
-  throw lastError || new Error('Unable to fetch approach plate PDF');
+  return await response.arrayBuffer();
 }
 
 async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {

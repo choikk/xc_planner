@@ -33,6 +33,11 @@ function parseCodesParam(rawValue) {
     .filter(Boolean);
 }
 
+function isAllowedApproachHost(hostname) {
+  const normalized = String(hostname || '').toLowerCase();
+  return normalized === 'faa.gov' || normalized.endsWith('.faa.gov');
+}
+
 function normalizeDetailedAirport(row) {
   return {
     airport_code: String(row.airport_code || '').trim().toUpperCase(),
@@ -81,6 +86,43 @@ export async function handler(event) {
   let client;
 
   try {
+    const plateUrl = event.queryStringParameters?.plateUrl;
+    if (plateUrl) {
+      const targetUrl = new URL(plateUrl);
+      if (targetUrl.protocol !== 'https:' || !isAllowedApproachHost(targetUrl.hostname)) {
+        return {
+          statusCode: 400,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ error: 'Unsupported approach plate host' }),
+        };
+      }
+
+      const plateResponse = await fetch(targetUrl.toString(), {
+        headers: {
+          accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.5',
+        },
+      });
+
+      if (!plateResponse.ok) {
+        return {
+          statusCode: plateResponse.status,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ error: `Failed to fetch approach plate: HTTP ${plateResponse.status}` }),
+        };
+      }
+
+      const plateBuffer = await plateResponse.arrayBuffer();
+      return {
+        statusCode: 200,
+        isBase64Encoded: true,
+        headers: {
+          'content-type': plateResponse.headers.get('content-type') || 'application/pdf',
+          'cache-control': 'public, max-age=86400',
+        },
+        body: Buffer.from(plateBuffer).toString('base64'),
+      };
+    }
+
     client = buildClient();
     await client.connect();
 
