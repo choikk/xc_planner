@@ -795,8 +795,12 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
   const left = 42;
   const right = 570;
   const fullWidth = right - left;
+  const gridGap = 16;
+  const compactColumnWidth = (right - left - gridGap) / 2;
+  const compactRightX = left + compactColumnWidth + gridGap;
   const stackedTop = 500;
-  const compactTop = 530;
+  const compactTopRowBottom = 532;
+  const compactTop = compactTopRowBottom - gridGap;
   const useCompactLayout = !fitsSinglePageStack(report.airportSections, stackedTop, fullWidth, false);
   const compactPlacements = useCompactLayout
     ? buildColumnPlacements(report.airportSections, compactTop, left, right)
@@ -823,9 +827,11 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
     color: '17 24 39',
   });
 
-  const distanceBoxY = useCompactLayout ? 532 : 532;
-  const distanceBoxHeight = useCompactLayout ? 118 : 118;
-  pdf.rect(left, distanceBoxY, 245, distanceBoxHeight, { fill: '239 246 255', stroke: '147 197 253' });
+  const distanceBoxX = useCompactLayout ? left : left;
+  const distanceBoxY = useCompactLayout ? compactTopRowBottom : 532;
+  const distanceBoxWidth = useCompactLayout ? compactColumnWidth : 245;
+  const distanceBoxHeight = useCompactLayout ? 182 : 118;
+  pdf.rect(distanceBoxX, distanceBoxY, distanceBoxWidth, distanceBoxHeight, { fill: '239 246 255', stroke: '147 197 253' });
   pdf.text(left + 12, distanceBoxY + distanceBoxHeight - 24, 'DISTANCES', {
     font: 'F2',
     size: useCompactLayout ? 9 : 10,
@@ -837,7 +843,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
       distanceLine.from,
       distanceLine.to,
       `${distanceLine.distance.toFixed(1)} NM`,
-      left + 12,
+      distanceBoxX + 12,
       distanceBoxY + distanceBoxHeight - 46 - (index * (useCompactLayout ? 13 : 16)),
       { size: useCompactLayout ? 8.5 : 10 }
     );
@@ -846,17 +852,17 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
     ? ['Always review NOTAMs, weather, and airport', 'conditions before departure.']
     : ['Always review NOTAMs, weather, and current airport conditions before departure.'];
   advisoryLines.forEach((lineText, index) => {
-    pdf.text(left + 12, distanceBoxY + 18 - (index * 10), lineText, {
+    pdf.text(distanceBoxX + 12, distanceBoxY + 18 - (index * 10), lineText, {
       size: useCompactLayout ? 7 : 7.8,
       color: '100 116 139',
     });
   });
 
   const mapBox = {
-    x: 318,
-    y: useCompactLayout ? 516 : 492,
-    width: 232,
-    height: useCompactLayout ? 134 : 158,
+    x: useCompactLayout ? compactRightX : 318,
+    y: useCompactLayout ? compactTopRowBottom : 492,
+    width: useCompactLayout ? compactColumnWidth : 232,
+    height: useCompactLayout ? 182 : 158,
   };
   if (routeMapImage) {
     pdf.rect(mapBox.x, mapBox.y, mapBox.width, mapBox.height, { fill: '239 246 255', stroke: '148 163 184' });
