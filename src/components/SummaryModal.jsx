@@ -538,7 +538,7 @@ function textWidthEstimate(value, size = 9) {
 }
 
 function drawInlineArrow(pdf, x, y, { color = '37 99 235', width = 16, lineWidth = 1.5 } = {}) {
-  const midY = y - 3;
+  const midY = y;
   pdf.line(x, midY, x + width, midY, { stroke: color, lineWidth });
   pdf.line(x + width, midY, x + width - 5, midY + 4, { stroke: color, lineWidth });
   pdf.line(x + width, midY, x + width - 5, midY - 4, { stroke: color, lineWidth });
@@ -546,6 +546,7 @@ function drawInlineArrow(pdf, x, y, { color = '37 99 235', width = 16, lineWidth
 
 function drawCodeSequence(pdf, codes, x, y, { size = 16, color = '37 99 235' } = {}) {
   let cursorX = x;
+  const arrowY = y + Math.max(3, size * 0.28);
 
   codes.forEach((code, index) => {
     pdf.text(cursorX, y, code, { font: 'F2', size, color });
@@ -553,7 +554,7 @@ function drawCodeSequence(pdf, codes, x, y, { size = 16, color = '37 99 235' } =
 
     if (index < codes.length - 1) {
       cursorX += 8;
-      drawInlineArrow(pdf, cursorX, y + 2, {
+      drawInlineArrow(pdf, cursorX, arrowY, {
         color,
         width: Math.max(16, size + 1),
         lineWidth: Math.max(1.2, size * 0.09),
@@ -853,9 +854,9 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
 
   const mapBox = {
     x: 318,
-    y: useCompactLayout ? 532 : 532,
+    y: useCompactLayout ? 516 : 492,
     width: 232,
-    height: useCompactLayout ? 118 : 118,
+    height: useCompactLayout ? 134 : 158,
   };
   if (routeMapImage) {
     pdf.rect(mapBox.x, mapBox.y, mapBox.width, mapBox.height, { fill: '239 246 255', stroke: '148 163 184' });
