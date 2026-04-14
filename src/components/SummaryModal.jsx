@@ -753,7 +753,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
   return pdf.finalize();
 }
 
-function SummaryPdfViewer({ report }) {
+function SummaryPdfViewer({ report, onDocumentReady }) {
   const [pdfUrl, setPdfUrl] = useState('');
 
   useEffect(() => {
@@ -761,23 +761,27 @@ function SummaryPdfViewer({ report }) {
     let nextUrl = '';
 
     setPdfUrl('');
+    onDocumentReady?.(null);
 
     (async () => {
       const routeMapImage = await createRouteMapJpeg(report.airportSections);
-      const url = URL.createObjectURL(buildGraphicalSummaryPdfBlob(report, routeMapImage));
+      const blob = buildGraphicalSummaryPdfBlob(report, routeMapImage);
+      const url = URL.createObjectURL(blob);
       if (!active) {
         URL.revokeObjectURL(url);
         return;
       }
       nextUrl = url;
       setPdfUrl(url);
+      onDocumentReady?.(blob);
     })();
 
     return () => {
       active = false;
+      onDocumentReady?.(null);
       if (nextUrl) URL.revokeObjectURL(nextUrl);
     };
-  }, [report]);
+  }, [report, onDocumentReady]);
 
   if (!pdfUrl) return <div className="summary-pdf-fallback">Building PDF...</div>;
 
@@ -801,10 +805,36 @@ export default function SummaryModal({
   tripType,
 }) {
   const [reportMode, setReportMode] = useState('pdf');
+  const [pdfBlob, setPdfBlob] = useState(null);
+  const [shareSupported, setShareSupported] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
-    if (open) setReportMode('pdf');
+    if (open) {
+      setReportMode('pdf');
+      setPdfBlob(null);
+    }
   }, [open, homeCode, firstLegCode, secondLegCode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const media = window.matchMedia('(max-width: 900px)');
+    const update = () => {
+      setIsMobileViewport(media.matches);
+      setShareSupported(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
+    };
+
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -881,6 +911,39 @@ export default function SummaryModal({
     routeName,
     total,
   };
+  const fileBaseName = routeName.replace(/[^A-Z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'trip_summary';
+
+  const handleShare = async () => {
+    if (!shareSupported || sharing) return;
+
+    setSharing(true);
+    try {
+      if (reportMode === 'pdf' && pdfBlob) {
+        const pdfFile = new File([pdfBlob], `${fileBaseName}.pdf`, {
+          type: 'application/pdf',
+        });
+
+        if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] })) {
+          await navigator.share({
+            title: 'Cross Country Trip Summary',
+            files: [pdfFile],
+          });
+          return;
+        }
+      }
+
+      await navigator.share({
+        title: 'Cross Country Trip Summary',
+        text: summaryText,
+      });
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        console.error('[SummaryModal] share failed', error);
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -892,26 +955,44 @@ export default function SummaryModal({
           </button>
         </div>
         <div className="summary-actions">
-          <button
-            type="button"
-            className={reportMode === 'pdf' ? 'primary-btn' : 'secondary-btn'}
-            onClick={() => setReportMode('pdf')}
-          >
-            Show PDF
-          </button>
-          <button
-            type="button"
-            className={reportMode === 'text' ? 'primary-btn' : 'secondary-btn'}
-            onClick={() => setReportMode('text')}
-          >
-            Show Text
-          </button>
+          <div className="summary-view-toggle" role="tablist" aria-label="Summary format">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={reportMode === 'pdf'}
+              className={reportMode === 'pdf' ? 'active' : ''}
+              onClick={() => setReportMode('pdf')}
+            >
+              PDF
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={reportMode === 'text'}
+              className={reportMode === 'text' ? 'active' : ''}
+              onClick={() => setReportMode('text')}
+            >
+              Text
+            </button>
+          </div>
+          {isMobileViewport && shareSupported && (
+            <button
+              type="button"
+              className="icon-btn summary-share-btn"
+              aria-label="Send to"
+              title="Send to"
+              disabled={sharing || (reportMode === 'pdf' && !pdfBlob)}
+              onClick={handleShare}
+            >
+              ⤴
+            </button>
+          )}
         </div>
 
         {reportMode === 'text' ? (
           <textarea className="summary-text-report" value={summaryText} readOnly />
         ) : (
-          <SummaryPdfViewer report={summaryReport} />
+          <SummaryPdfViewer report={summaryReport} onDocumentReady={setPdfBlob} />
         )}
       </div>
     </div>
