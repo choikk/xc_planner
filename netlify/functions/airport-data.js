@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+import { stream } from '@netlify/functions';
 import pg from 'pg';
 
 const { Client } = pg;
@@ -26,7 +28,27 @@ function safeObject(value) {
   }
 }
 
-export async function handler(event) {
+function normalizeAirport(row) {
+  const raw = safeObject(row.raw_json);
+
+  return {
+    airport_code: String(row.airport_code || '').trim().toUpperCase(),
+    airport_name: raw.airport_name || '',
+    city: raw.city || '',
+    state: raw.state || 'unknown',
+    country: raw.country || 'US',
+    lat: Number(raw.lat),
+    lon: Number(raw.lon),
+    elevation: Number(raw.elevation || 0),
+    fuel: raw.fuel || raw.fuel_raw || 'None',
+    airspace: raw.airspace || raw.airspace_class || 'G',
+    remarks: raw.remarks || '',
+    runways: Array.isArray(raw.runways) ? raw.runways : [],
+    approaches: Array.isArray(raw.approaches) ? raw.approaches : [],
+  };
+}
+
+export const handler = stream(async (event) => {
   let client;
 
   try {
@@ -51,10 +73,6 @@ export async function handler(event) {
 
     const airportCount = countResult.rows[0]?.airport_count || 0;
 
-    console.log('[airport-data] versionResult.rows =', versionResult.rows);
-    console.log('[airport-data] databaseVersion =', databaseVersion);
-    console.log('[airport-data] airportCount =', airportCount);
-
     if (event.queryStringParameters?.meta === '1') {
       return {
         statusCode: 200,
@@ -70,31 +88,26 @@ export async function handler(event) {
       order by airport_code
     `);
 
-    const airports = result.rows
-      .map((row) => {
-        const raw = safeObject(row.raw_json);
+    const body = Readable.from(
+      (async function* streamAirports() {
+        yield `{"databaseVersion":${JSON.stringify(databaseVersion)},"airportCount":${JSON.stringify(airportCount)},"airports":[`;
 
-        return {
-          airport_code: String(row.airport_code || '').trim().toUpperCase(),
-          airport_name: raw.airport_name || '',
-          city: raw.city || '',
-          state: raw.state || 'unknown',
-          country: raw.country || 'US',
-          lat: Number(raw.lat),
-          lon: Number(raw.lon),
-          elevation: Number(raw.elevation || 0),
-          fuel: raw.fuel || raw.fuel_raw || 'None',
-          airspace: raw.airspace || raw.airspace_class || 'G',
-          remarks: raw.remarks || '',
-          runways: Array.isArray(raw.runways) ? raw.runways : [],
-          approaches: Array.isArray(raw.approaches) ? raw.approaches : [],
-        };
-      })
-      .filter((airport) => airport.airport_code);
+        let first = true;
+        for (const row of result.rows) {
+          const airport = normalizeAirport(row);
+          if (!airport.airport_code) continue;
 
-    console.log('[airport-data] result.rows.length =', result.rows.length);
-    console.log('[airport-data] airports.length =', airports.length);
-    console.log('[airport-data] first 3 airport codes =', airports.slice(0, 3).map((a) => a.airport_code));
+          if (!first) {
+            yield ',';
+          }
+
+          yield JSON.stringify(airport);
+          first = false;
+        }
+
+        yield ']}';
+      })()
+    );
 
     return {
       statusCode: 200,
@@ -102,11 +115,7 @@ export async function handler(event) {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'public, max-age=300',
       },
-      body: JSON.stringify({
-        databaseVersion,
-        airportCount,
-        airports,
-      }),
+      body,
     };
   } catch (error) {
     console.error('[airport-data] ERROR =', error);
@@ -124,4 +133,4 @@ export async function handler(event) {
       await client.end().catch(() => {});
     }
   }
-}
+});
