@@ -537,6 +537,45 @@ function textWidthEstimate(value, size = 9) {
   return String(value).length * size * 0.53;
 }
 
+function drawInlineArrow(pdf, x, y, { color = '37 99 235', width = 16, lineWidth = 1.5 } = {}) {
+  const midY = y - 3;
+  pdf.line(x, midY, x + width, midY, { stroke: color, lineWidth });
+  pdf.line(x + width, midY, x + width - 5, midY + 4, { stroke: color, lineWidth });
+  pdf.line(x + width, midY, x + width - 5, midY - 4, { stroke: color, lineWidth });
+}
+
+function drawCodeSequence(pdf, codes, x, y, { size = 16, color = '37 99 235' } = {}) {
+  let cursorX = x;
+
+  codes.forEach((code, index) => {
+    pdf.text(cursorX, y, code, { font: 'F2', size, color });
+    cursorX += textWidthEstimate(code, size);
+
+    if (index < codes.length - 1) {
+      cursorX += 8;
+      drawInlineArrow(pdf, cursorX, y + 2, {
+        color,
+        width: Math.max(16, size + 1),
+        lineWidth: Math.max(1.2, size * 0.09),
+      });
+      cursorX += Math.max(16, size + 1) + 8;
+    }
+  });
+}
+
+function drawDistanceLine(pdf, fromCode, toCode, distanceText, x, y, { size = 10 } = {}) {
+  let cursorX = x;
+  const color = '30 41 59';
+
+  pdf.text(cursorX, y, fromCode, { font: 'F3', size, color });
+  cursorX += textWidthEstimate(fromCode, size) + 8;
+  drawInlineArrow(pdf, cursorX, y + 1, { color, width: 12, lineWidth: 1 });
+  cursorX += 20;
+  pdf.text(cursorX, y, toCode, { font: 'F3', size, color });
+  cursorX += textWidthEstimate(toCode, size);
+  pdf.text(cursorX + 6, y, `: ${distanceText}`, { font: 'F3', size, color });
+}
+
 function maxCharsForWidth(width, size = 9) {
   return Math.max(12, Math.floor(width / Math.max(size * 0.53, 1)));
 }
@@ -773,37 +812,40 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
     size: useCompactLayout ? 7.5 : 8,
     color: '100 116 139',
   });
-  pdf.text(left, titleTop - 34, report.routeName, {
-    font: 'F2',
-    size: useCompactLayout ? 14 : 16,
+  drawCodeSequence(pdf, report.routeCodes, left, titleTop - 44, {
+    size: useCompactLayout ? 16 : 19,
     color: '37 99 235',
   });
-  pdf.text(left, titleTop - 54, `Total ${report.total.toFixed(1)} NM`, {
+  pdf.text(left, titleTop - 68, `Total ${report.total.toFixed(1)} NM`, {
     font: 'F2',
     size: useCompactLayout ? 12 : 14,
     color: '17 24 39',
   });
 
-  const distanceBoxY = useCompactLayout ? 585 : 560;
-  const distanceBoxHeight = useCompactLayout ? 80 : 96;
+  const distanceBoxY = useCompactLayout ? 532 : 532;
+  const distanceBoxHeight = useCompactLayout ? 118 : 118;
   pdf.rect(left, distanceBoxY, 245, distanceBoxHeight, { fill: '239 246 255', stroke: '147 197 253' });
   pdf.text(left + 12, distanceBoxY + distanceBoxHeight - 24, 'DISTANCES', {
     font: 'F2',
     size: useCompactLayout ? 9 : 10,
     color: '30 64 175',
   });
-  report.distanceLines.forEach((distanceLine, index) => {
-    pdf.text(left + 12, distanceBoxY + distanceBoxHeight - 46 - (index * (useCompactLayout ? 13 : 16)), distanceLine, {
-      font: 'F3',
-      size: useCompactLayout ? 8.5 : 10,
-      color: '30 41 59',
-    });
+  report.distanceSegments.forEach((distanceLine, index) => {
+    drawDistanceLine(
+      pdf,
+      distanceLine.from,
+      distanceLine.to,
+      `${distanceLine.distance.toFixed(1)} NM`,
+      left + 12,
+      distanceBoxY + distanceBoxHeight - 46 - (index * (useCompactLayout ? 13 : 16)),
+      { size: useCompactLayout ? 8.5 : 10 }
+    );
   });
   const advisoryLines = useCompactLayout
     ? ['Always review NOTAMs, weather, and airport', 'conditions before departure.']
     : ['Always review NOTAMs, weather, and current airport conditions before departure.'];
   advisoryLines.forEach((lineText, index) => {
-    pdf.text(left + 4, distanceBoxY - 14 - (index * 10), lineText, {
+    pdf.text(left + 12, distanceBoxY + 18 - (index * 10), lineText, {
       size: useCompactLayout ? 7 : 7.8,
       color: '100 116 139',
     });
@@ -811,9 +853,9 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
 
   const mapBox = {
     x: 318,
-    y: useCompactLayout ? 575 : 550,
+    y: useCompactLayout ? 532 : 532,
     width: 232,
-    height: useCompactLayout ? 108 : 130,
+    height: useCompactLayout ? 118 : 118,
   };
   if (routeMapImage) {
     pdf.rect(mapBox.x, mapBox.y, mapBox.width, mapBox.height, { fill: '239 246 255', stroke: '148 163 184' });
@@ -1099,14 +1141,16 @@ export default function SummaryModal({
       : null,
   ].filter(Boolean);
 
-  const routeName = [...airportSections.map(({ code }) => code), homeCode].join(' -> ');
+  const routeCodes = [...airportSections.map(({ code }) => code), homeCode];
+  const routeName = routeCodes.join(' -> ');
+  const routeDisplay = routeCodes.join(' → ');
 
   const sectionDivider = '------------------------------';
   const summaryText = [
     'Cross Country Trip Summary',
     GENERATED_BY_LINE,
     '',
-    `Course: ${routeName}`,
+    `Course: ${routeDisplay}`,
     `Total: ${total.toFixed(1)} NM`,
     '',
     'Leg Distances:',
@@ -1122,7 +1166,17 @@ export default function SummaryModal({
 
   const summaryReport = {
     airportSections,
+    routeCodes,
     distanceLines,
+    distanceSegments: [
+      { from: homeCode, to: firstLegCode, distance: leg1 },
+      tripType === 'two' && secondLegCode
+        ? { from: firstLegCode, to: secondLegCode, distance: leg2 }
+        : { from: firstLegCode, to: homeCode, distance: leg1 },
+      tripType === 'two' && secondLegCode
+        ? { from: secondLegCode, to: homeCode, distance: leg3 }
+        : null,
+    ].filter(Boolean),
     routeName,
     total,
   };
