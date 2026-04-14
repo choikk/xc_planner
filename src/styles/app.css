@@ -17,13 +17,16 @@ select optgroup {
 .app-shell {
   display: flex;
   height: 100vh;
+  min-width: 0;
   overflow: hidden;
   background: #eef2f7;
 }
 
 .desktop-sidebar {
+  flex: 0 1 420px;
   width: 420px;
   max-width: 40vw;
+  min-width: 0;
   height: 100vh;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -58,7 +61,7 @@ select optgroup {
   display: flex;
   align-items: center;
   gap: .5rem;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .title-heading-button {
@@ -74,7 +77,13 @@ select optgroup {
 .title-text {
   display: block;
   min-width: 0;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mobile-title-text {
+  display: grid;
+  line-height: 1.02;
 }
 
 .subtle-line {
@@ -85,7 +94,7 @@ select optgroup {
 
 .panel-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .5rem;
   margin-bottom: 1rem;
   position: sticky;
@@ -96,12 +105,16 @@ select optgroup {
 }
 
 .panel-tab-btn {
+  min-width: 0;
   min-height: 40px;
+  padding: .45rem .4rem;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #fff;
   color: #334155;
   font-weight: 600;
+  line-height: 1.1;
+  white-space: normal;
 }
 
 .panel-tab-btn.active {
@@ -470,7 +483,7 @@ details { margin-bottom: .65rem; }
   right: 12px;
   bottom: 24px;
   z-index: 800;
-  pointer-events: none;
+  pointer-events: auto;
   background: rgba(255, 255, 255, .94);
   border: 1px solid #cbd5e1;
   border-radius: 8px;
@@ -480,9 +493,29 @@ details { margin-bottom: .65rem; }
   line-height: 1.35;
 }
 
+.airspace-legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .3rem;
+}
+
 .airspace-legend strong {
   display: block;
-  margin-bottom: .35rem;
+  margin-bottom: 0;
+}
+
+.airspace-legend-toggle {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .airspace-legend-row {
@@ -875,7 +908,7 @@ details { margin-bottom: .65rem; }
     position: absolute;
     top: 10px;
     left: 58px;
-    right: min(52vw, 228px);
+    right: min(45vw, 192px);
     z-index: 1000;
     pointer-events: none;
   }
@@ -891,18 +924,20 @@ details { margin-bottom: .65rem; }
   }
 
   .mobile-map-title .title-block h1 {
-    font-size: 1.05rem;
+    font-size: .98rem;
     line-height: 1.05;
     gap: .38rem;
+    align-items: flex-start;
   }
 
   .mobile-map-title .title-mark {
     font-size: .92rem;
+    margin-top: .08rem;
   }
 
   .mobile-map-title .subtle-line {
     margin-top: .2rem;
-    font-size: .74rem;
+    font-size: .7rem;
     line-height: 1.15;
   }
 
@@ -926,7 +961,8 @@ details { margin-bottom: .65rem; }
     transition: none;
   }
 
-  .bottom-sheet.collapsed { height: 19vh; }
+  .bottom-sheet.collapsed { height: clamp(98px, 14vh, 128px); }
+  .bottom-sheet.collapsed.has-summary-action { height: clamp(154px, 23vh, 188px); }
   .bottom-sheet.half { height: 56vh; }
   .bottom-sheet.full { height: 90vh; }
 
@@ -976,14 +1012,24 @@ details { margin-bottom: .65rem; }
 
   .panel-tabs {
     top: 0;
+    margin-bottom: .7rem;
+  }
+
+  .bottom-sheet .footer-actions {
+    position: static;
+    margin-top: 0;
+    margin-bottom: .8rem;
+    padding-top: 0;
+    background: transparent;
   }
 
   .airspace-legend {
     top: 12px;
     right: 12px;
     bottom: auto;
-    max-width: min(48vw, 220px);
-    font-size: .75rem;
+    max-width: min(41vw, 182px);
+    padding: .5rem .6rem;
+    font-size: .71rem;
   }
 
   .summary-actions {

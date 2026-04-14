@@ -30,6 +30,7 @@ const defaultFilters = {
 };
 
 const panelTabs = [
+  { id: 'home', label: 'Home' },
   { id: 'plan', label: 'Plan' },
   { id: 'filters', label: 'Filters' },
   { id: 'results', label: 'Results' },
@@ -49,7 +50,7 @@ export default function App() {
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [sheetState, setSheetState] = useState('half');
   const [homeRestored, setHomeRestored] = useState(false);
-  const [activePanelTab, setActivePanelTab] = useState('plan');
+  const [activePanelTab, setActivePanelTab] = useState('home');
 
   const countries = locationIndex.countries;
   const states = useMemo(() => {
@@ -199,6 +200,32 @@ export default function App() {
     </div>
   );
 
+  const mobileTitleBlock = (
+    <div className="title-block mobile-title-card">
+      <h1
+        className="title-heading-button"
+        role="button"
+        tabIndex={0}
+        title="Click for credits"
+        onClick={() => setCreditsOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setCreditsOpen(true);
+          }
+        }}
+      >
+        <span className="title-mark">🛫</span>
+        <span className="title-text mobile-title-text">
+          <span>Cross Country</span>
+          <span>Flight Planner</span>
+        </span>
+      </h1>
+      <div className="subtle-line">App version: {APP_VERSION}</div>
+      <div className="subtle-line">FAA Database as of: {databaseVersion}</div>
+    </div>
+  );
+
   const tabsBlock = (
     <div className="panel-tabs" role="tablist" aria-label="Planner sections">
       {panelTabs.map((tab) => (
@@ -233,27 +260,27 @@ export default function App() {
     <>
       {titleBlock}
       {tabsBlock}
+      {activePanelTab === 'home' && (
+        <HomeBaseSection
+          countries={countries}
+          states={states}
+          airports={airports}
+          selectedCountry={selectedCountry}
+          selectedState={selectedState}
+          selectedAirportCode={selectedAirportCode}
+          onCountryChange={setSelectedCountry}
+          onStateChange={setSelectedState}
+          onAirportChange={setSelectedAirportCode}
+          selectedAirport={selectedAirportWithCode}
+        />
+      )}
       {activePanelTab === 'plan' && (
-        <>
-          <HomeBaseSection
-            countries={countries}
-            states={states}
-            airports={airports}
-            selectedCountry={selectedCountry}
-            selectedState={selectedState}
-            selectedAirportCode={selectedAirportCode}
-            onCountryChange={setSelectedCountry}
-            onStateChange={setSelectedState}
-            onAirportChange={setSelectedAirportCode}
-            selectedAirport={selectedAirportWithCode}
-          />
-          <YourTripSection
-            filters={filters}
-            setFilters={setFilters}
-            onMapReset={handleMapReset}
-            hasMapSelection={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
-          />
-        </>
+        <YourTripSection
+          filters={filters}
+          setFilters={setFilters}
+          onMapReset={handleMapReset}
+          hasMapSelection={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
+        />
       )}
       {activePanelTab === 'filters' && <FiltersSection filters={filters} setFilters={setFilters} />}
       {activePanelTab === 'results' && (
@@ -276,27 +303,28 @@ export default function App() {
   const mobilePanel = (
     <>
       {tabsBlock}
+      {panelFooter}
+      {activePanelTab === 'home' && (
+        <HomeBaseSection
+          countries={countries}
+          states={states}
+          airports={airports}
+          selectedCountry={selectedCountry}
+          selectedState={selectedState}
+          selectedAirportCode={selectedAirportCode}
+          onCountryChange={setSelectedCountry}
+          onStateChange={setSelectedState}
+          onAirportChange={setSelectedAirportCode}
+          selectedAirport={selectedAirportWithCode}
+        />
+      )}
       {activePanelTab === 'plan' && (
-        <>
-          <HomeBaseSection
-            countries={countries}
-            states={states}
-            airports={airports}
-            selectedCountry={selectedCountry}
-            selectedState={selectedState}
-            selectedAirportCode={selectedAirportCode}
-            onCountryChange={setSelectedCountry}
-            onStateChange={setSelectedState}
-            onAirportChange={setSelectedAirportCode}
-            selectedAirport={selectedAirportWithCode}
-          />
-          <YourTripSection
-            filters={filters}
-            setFilters={setFilters}
-            onMapReset={handleMapReset}
-            hasMapSelection={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
-          />
-        </>
+        <YourTripSection
+          filters={filters}
+          setFilters={setFilters}
+          onMapReset={handleMapReset}
+          hasMapSelection={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
+        />
       )}
       {activePanelTab === 'filters' && <FiltersSection filters={filters} setFilters={setFilters} />}
       {activePanelTab === 'results' && (
@@ -312,7 +340,6 @@ export default function App() {
           onSelectSecondLeg={handleSelectSecondLeg}
         />
       )}
-      {panelFooter}
     </>
   );
 
@@ -329,7 +356,7 @@ export default function App() {
       <aside className="desktop-sidebar">{desktopPanel}</aside>
       <main className="map-shell">
         <div className="mobile-map-title">
-          {titleBlock}
+          {mobileTitleBlock}
         </div>
         <MapView
           homeAirport={selectedAirportWithCode}
@@ -350,7 +377,11 @@ export default function App() {
       </main>
 
       <div className="mobile-only">
-        <BottomSheet state={sheetState} setState={setSheetState}>
+        <BottomSheet
+          state={sheetState}
+          setState={setSheetState}
+          hasSummaryAction={Boolean(selectedFirstLegCode)}
+        >
           {mobilePanel}
         </BottomSheet>
       </div>

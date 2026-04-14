@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 const order = ['collapsed', 'half', 'full'];
-const heightByState = {
-  collapsed: 0.19,
-  half: 0.56,
-  full: 0.9,
-};
 
-export default function BottomSheet({ state, setState, children }) {
+export default function BottomSheet({ state, setState, children, hasSummaryAction = false }) {
+  const heightByState = {
+    collapsed: hasSummaryAction ? 0.23 : 0.14,
+    half: 0.56,
+    full: 0.9,
+  };
   const startY = useRef(0);
   const pointerId = useRef(null);
   const startHeight = useRef(heightByState[state]);
@@ -79,7 +79,7 @@ export default function BottomSheet({ state, setState, children }) {
 
   return (
     <div
-      className={`bottom-sheet ${state} ${dragging ? 'dragging' : ''}`}
+      className={`bottom-sheet ${state} ${hasSummaryAction ? 'has-summary-action' : ''} ${dragging ? 'dragging' : ''}`}
       style={{ '--sheet-drag-offset': `${dragOffset}px` }}
     >
       <div

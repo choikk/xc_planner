@@ -168,6 +168,7 @@ export default function MapView({
   onRequestAirportDetails,
 }) {
   const [infoPopup, setInfoPopup] = useState(null);
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
 
   const homeCenter = useMemo(() => {
     if (homeAirport && isFiniteCoord(homeAirport.lat, homeAirport.lon)) {
@@ -210,6 +211,22 @@ export default function MapView({
       onRequestAirportDetails?.(visibleInfoPopup.code);
     }
   }, [visibleInfoPopup?.code, onRequestAirportDetails]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const media = window.matchMedia('(max-width: 560px)');
+    const update = () => setLegendCollapsed(media.matches);
+    update();
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   const triangleLine =
     homeAirport &&
@@ -291,18 +308,31 @@ export default function MapView({
 
   return (
     <MapContainer center={homeCenter} zoom={7} className="map-canvas" zoomControl>
-      <div className="airspace-legend">
-        <strong>Airspace Classes</strong>
-        {airspaceLegendItems.map(([classCode, label]) => (
-          <div key={classCode} className="airspace-legend-row">
-            <span className="airspace-legend-swatch" style={{ background: getAirspaceColor(classCode) }} />
-            <span>{label}</span>
-          </div>
-        ))}
-        <div className="airspace-legend-row muted">
-          <span className="airspace-legend-swatch outer-sample" />
-          <span>Filtered out / Max + 100 NM</span>
+      <div className={`airspace-legend ${legendCollapsed ? 'collapsed' : ''}`}>
+        <div className="airspace-legend-header">
+          <strong>Airspace Classes</strong>
+          <button
+            type="button"
+            className="airspace-legend-toggle"
+            onClick={() => setLegendCollapsed((current) => !current)}
+          >
+            {legendCollapsed ? 'Show' : 'Hide'}
+          </button>
         </div>
+        {!legendCollapsed && (
+          <>
+            {airspaceLegendItems.map(([classCode, label]) => (
+              <div key={classCode} className="airspace-legend-row">
+                <span className="airspace-legend-swatch" style={{ background: getAirspaceColor(classCode) }} />
+                <span>{label}</span>
+              </div>
+            ))}
+            <div className="airspace-legend-row muted">
+              <span className="airspace-legend-swatch outer-sample" />
+              <span>Filtered out / Max + 100 NM</span>
+            </div>
+          </>
+        )}
       </div>
 
       <TileLayer
