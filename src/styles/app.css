@@ -826,13 +826,19 @@ details { margin-bottom: .65rem; }
   }
 
   .sheet-toggle-link {
+    min-width: 0;
+    min-height: 0;
     border: 0;
+    border-radius: 0;
     padding: 0;
     background: transparent;
     color: #475569;
     font-size: .82rem;
     font-weight: 600;
     line-height: 1;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
   }
 
   .bottom-sheet-content {
