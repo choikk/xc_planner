@@ -817,22 +817,27 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
     size: useCompactLayout ? 7.5 : 8,
     color: '100 116 139',
   });
-  drawCodeSequence(pdf, report.routeCodes, left, titleTop - 44, {
-    size: useCompactLayout ? 16 : 19,
-    color: '37 99 235',
-  });
-  pdf.text(left, titleTop - 68, `Total ${report.total.toFixed(1)} NM`, {
-    font: 'F2',
-    size: useCompactLayout ? 12 : 14,
-    color: '17 24 39',
-  });
 
   const distanceBoxX = useCompactLayout ? left : left;
   const distanceBoxY = useCompactLayout ? compactTopRowBottom : 532;
   const distanceBoxWidth = useCompactLayout ? compactColumnWidth : 245;
-  const distanceBoxHeight = useCompactLayout ? 182 : 118;
+  const distanceBoxHeight = 182;
   pdf.rect(distanceBoxX, distanceBoxY, distanceBoxWidth, distanceBoxHeight, { fill: '239 246 255', stroke: '147 197 253' });
-  pdf.text(left + 12, distanceBoxY + distanceBoxHeight - 24, 'DISTANCES', {
+  pdf.text(distanceBoxX + 12, distanceBoxY + distanceBoxHeight - 24, 'ROUTE', {
+    font: 'F2',
+    size: useCompactLayout ? 9 : 10,
+    color: '30 64 175',
+  });
+  drawCodeSequence(pdf, report.routeCodes, distanceBoxX + 12, distanceBoxY + distanceBoxHeight - 46, {
+    size: useCompactLayout ? 11 : 13,
+    color: '37 99 235',
+  });
+  pdf.text(distanceBoxX + 12, distanceBoxY + distanceBoxHeight - 66, `Total ${report.total.toFixed(1)} NM`, {
+    font: 'F2',
+    size: useCompactLayout ? 9.5 : 11,
+    color: '17 24 39',
+  });
+  pdf.text(distanceBoxX + 12, distanceBoxY + distanceBoxHeight - 90, 'DISTANCES', {
     font: 'F2',
     size: useCompactLayout ? 9 : 10,
     color: '30 64 175',
@@ -844,7 +849,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
       distanceLine.to,
       `${distanceLine.distance.toFixed(1)} NM`,
       distanceBoxX + 12,
-      distanceBoxY + distanceBoxHeight - 46 - (index * (useCompactLayout ? 13 : 16)),
+      distanceBoxY + distanceBoxHeight - 112 - (index * (useCompactLayout ? 13 : 16)),
       { size: useCompactLayout ? 8.5 : 10 }
     );
   });
@@ -860,9 +865,9 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
 
   const mapBox = {
     x: useCompactLayout ? compactRightX : 318,
-    y: useCompactLayout ? compactTopRowBottom : 492,
+    y: useCompactLayout ? compactTopRowBottom : 532,
     width: useCompactLayout ? compactColumnWidth : 232,
-    height: useCompactLayout ? 182 : 158,
+    height: 182,
   };
   if (routeMapImage) {
     pdf.rect(mapBox.x, mapBox.y, mapBox.width, mapBox.height, { fill: '239 246 255', stroke: '148 163 184' });
