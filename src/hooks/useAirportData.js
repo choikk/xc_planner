@@ -7,6 +7,23 @@ function isFiniteCoord(lat, lon) {
   return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
 }
 
+function normalizeRunway(runway) {
+  return {
+    rwy_id: runway.rwy_id || runway.i || '',
+    length: Number(runway.length ?? runway.l ?? 0),
+    width: Number(runway.width ?? runway.w ?? 0),
+    surface: runway.surface || runway.s || '',
+    condition: runway.condition || runway.c || '',
+  };
+}
+
+function normalizeApproach(approach) {
+  return {
+    name: approach.name || approach.n || '',
+    pdf_url: approach.pdf_url || approach.u || '',
+  };
+}
+
 export function useAirportData() {
   const [airportData, setAirportData] = useState({});
   const [databaseVersion, setDatabaseVersion] = useState('UNKNOWN');
@@ -48,29 +65,42 @@ export function useAirportData() {
         let invalidCoordCount = 0;
 
         airportsArray.forEach((airport) => {
-          const code = String(airport.airport_code || airport.code || '').trim().toUpperCase();
+          const code = String(airport.airport_code || airport.code || airport.c || '').trim().toUpperCase();
           if (!code) return;
 
-          const lat = Number(airport.lat);
-          const lon = Number(airport.lon);
+          const lat = Number(airport.lat ?? airport.la);
+          const lon = Number(airport.lon ?? airport.lo);
 
           if (!isFiniteCoord(lat, lon)) {
             invalidCoordCount += 1;
             return;
           }
 
+          const runwaysRaw = Array.isArray(airport.runways)
+            ? airport.runways
+            : Array.isArray(airport.r)
+              ? airport.r
+              : [];
+          const approachesRaw = Array.isArray(airport.approaches)
+            ? airport.approaches
+            : Array.isArray(airport.p)
+              ? airport.p
+              : [];
+
           normalized[code] = {
             ...airport,
             airport_code: code,
-            state: airport.state || 'unknown',
-            country: airport.country || 'US',
-            airspace: airport.airspace || airport.airspace_class || 'G',
-            fuel: airport.fuel || airport.fuel_raw || 'None',
-            runways: Array.isArray(airport.runways) ? airport.runways : [],
-            approaches: Array.isArray(airport.approaches) ? airport.approaches : [],
+            airport_name: airport.airport_name || airport.name || airport.n || '',
+            city: airport.city || airport.ci || '',
+            state: airport.state || airport.s || 'unknown',
+            country: airport.country || airport.co || 'US',
+            airspace: airport.airspace || airport.airspace_class || airport.a || 'G',
+            fuel: airport.fuel || airport.fuel_raw || airport.f || 'None',
+            runways: runwaysRaw.map(normalizeRunway).filter((runway) => runway.rwy_id),
+            approaches: approachesRaw.map(normalizeApproach).filter((approach) => approach.name),
             lat,
             lon,
-            elevation: Number(airport.elevation || 0),
+            elevation: Number(airport.elevation ?? airport.e ?? 0),
           };
         });
 

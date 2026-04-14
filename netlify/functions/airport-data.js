@@ -28,24 +28,60 @@ function safeObject(value) {
   }
 }
 
-function normalizeAirport(row) {
-  const raw = safeObject(row.raw_json);
-
+function compactRunway(runway) {
   return {
-    airport_code: String(row.airport_code || '').trim().toUpperCase(),
-    airport_name: raw.airport_name || '',
-    city: raw.city || '',
-    state: raw.state || 'unknown',
-    country: raw.country || 'US',
-    lat: Number(raw.lat),
-    lon: Number(raw.lon),
-    elevation: Number(raw.elevation || 0),
-    fuel: raw.fuel || raw.fuel_raw || 'None',
-    airspace: raw.airspace || raw.airspace_class || 'G',
-    remarks: raw.remarks || '',
-    runways: Array.isArray(raw.runways) ? raw.runways : [],
-    approaches: Array.isArray(raw.approaches) ? raw.approaches : [],
+    i: runway.rwy_id || '',
+    l: Number(runway.length || 0),
+    w: Number(runway.width || 0),
+    s: runway.surface || '',
+    c: runway.condition || '',
   };
+}
+
+function compactApproach(approach) {
+  return {
+    n: approach.name || '',
+    u: approach.pdf_url || '',
+  };
+}
+
+function compactAirport(row) {
+  const raw = safeObject(row.raw_json);
+  const runways = Array.isArray(raw.runways) ? raw.runways.map(compactRunway).filter((runway) => runway.i) : [];
+  const approaches = Array.isArray(raw.approaches)
+    ? raw.approaches.map(compactApproach).filter((approach) => approach.n)
+    : [];
+
+  const airport = {
+    c: String(row.airport_code || '').trim().toUpperCase(),
+    n: raw.airport_name || '',
+    ci: raw.city || '',
+    s: raw.state || 'unknown',
+    la: Number(raw.lat),
+    lo: Number(raw.lon),
+    e: Number(raw.elevation || 0),
+    a: raw.airspace || raw.airspace_class || 'G',
+  };
+
+  if (raw.country && raw.country !== 'US') {
+    airport.co = raw.country;
+  }
+
+  if (raw.fuel && raw.fuel !== 'None') {
+    airport.f = raw.fuel;
+  } else if (raw.fuel_raw && raw.fuel_raw !== 'None') {
+    airport.f = raw.fuel_raw;
+  }
+
+  if (runways.length > 0) {
+    airport.r = runways;
+  }
+
+  if (approaches.length > 0) {
+    airport.p = approaches;
+  }
+
+  return airport;
 }
 
 export const handler = stream(async (event) => {
@@ -94,8 +130,8 @@ export const handler = stream(async (event) => {
 
         let first = true;
         for (const row of result.rows) {
-          const airport = normalizeAirport(row);
-          if (!airport.airport_code) continue;
+          const airport = compactAirport(row);
+          if (!airport.c) continue;
 
           if (!first) {
             yield ',';
