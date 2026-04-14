@@ -807,7 +807,6 @@ export default function SummaryModal({
   const [reportMode, setReportMode] = useState('pdf');
   const [pdfBlob, setPdfBlob] = useState(null);
   const [shareSupported, setShareSupported] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
@@ -822,7 +821,6 @@ export default function SummaryModal({
 
     const media = window.matchMedia('(max-width: 900px)');
     const update = () => {
-      setIsMobileViewport(media.matches);
       setShareSupported(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
     };
 
@@ -933,7 +931,7 @@ export default function SummaryModal({
   ].join('|');
 
   const handleShare = async () => {
-    if (!shareSupported || sharing) return;
+    if (sharing) return;
 
     setSharing(true);
     try {
@@ -942,19 +940,49 @@ export default function SummaryModal({
           type: 'application/pdf',
         });
 
-        if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] })) {
+        if (
+          shareSupported &&
+          typeof navigator.canShare === 'function' &&
+          navigator.canShare({ files: [pdfFile] })
+        ) {
           await navigator.share({
             title: 'Cross Country Trip Summary',
             files: [pdfFile],
           });
           return;
         }
+
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = pdfUrl;
+        link.download = `${fileBaseName}.pdf`;
+        link.rel = 'noopener';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(pdfUrl), 0);
+        return;
       }
 
-      await navigator.share({
-        title: 'Cross Country Trip Summary',
-        text: summaryText,
-      });
+      if (shareSupported) {
+        await navigator.share({
+          title: 'Cross Country Trip Summary',
+          text: summaryText,
+        });
+        return;
+      }
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(summaryText);
+        return;
+      }
+
+      const textBlob = new Blob([summaryText], { type: 'text/plain;charset=utf-8' });
+      const textUrl = URL.createObjectURL(textBlob);
+      const link = document.createElement('a');
+      link.href = textUrl;
+      link.download = `${fileBaseName}.txt`;
+      link.rel = 'noopener';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(textUrl), 0);
     } catch (error) {
       if (error?.name !== 'AbortError') {
         console.error('[SummaryModal] share failed', error);
@@ -994,25 +1022,25 @@ export default function SummaryModal({
               Text
             </button>
           </div>
-          {isMobileViewport && shareSupported && (
-            <button
-              type="button"
-              className="icon-btn summary-share-btn"
-              aria-label="Send to"
-              title="Send to"
-              disabled={sharing || (reportMode === 'pdf' && !pdfBlob)}
-              onClick={handleShare}
-            >
-              ⤴
-            </button>
-          )}
+          <button
+            type="button"
+            className="icon-btn summary-share-btn"
+            aria-label="Send to"
+            title="Send to"
+            disabled={sharing || (reportMode === 'pdf' && !pdfBlob)}
+            onClick={handleShare}
+          >
+            ⤴
+          </button>
         </div>
 
-        {reportMode === 'text' ? (
-          <textarea className="summary-text-report" value={summaryText} readOnly />
-        ) : (
-          <SummaryPdfViewer report={summaryReport} reportKey={reportKey} onDocumentReady={setPdfBlob} />
-        )}
+        <div className="summary-content-shell">
+          {reportMode === 'text' ? (
+            <textarea className="summary-text-report" value={summaryText} readOnly />
+          ) : (
+            <SummaryPdfViewer report={summaryReport} reportKey={reportKey} onDocumentReady={setPdfBlob} />
+          )}
+        </div>
       </div>
     </div>
   );

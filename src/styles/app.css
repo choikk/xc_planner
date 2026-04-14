@@ -597,10 +597,17 @@ details { margin-bottom: .65rem; }
   line-height: 1;
 }
 
+.summary-content-shell {
+  width: 100%;
+  height: min(68vh, 780px);
+  min-height: 520px;
+}
+
 .summary-text-report {
   width: 100%;
-  min-height: min(62vh, 620px);
-  resize: vertical;
+  height: 100%;
+  min-height: 0;
+  resize: none;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: .9rem;
@@ -613,8 +620,8 @@ details { margin-bottom: .65rem; }
 .summary-pdf-viewer,
 .summary-pdf-fallback {
   width: 100%;
-  height: min(68vh, 780px);
-  min-height: 520px;
+  height: 100%;
+  min-height: 0;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #eef2f7;
