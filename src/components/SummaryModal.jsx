@@ -858,6 +858,24 @@ export default function SummaryModal({
     !(tripType === 'two' && secondLegCode && !second?.detailsLoaded)
   );
 
+  if (!hasRequiredSelection) return null;
+  if (!hasRequiredAirports) return null;
+  if (!detailsReady) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>Trip Summary</h2>
+            <button type="button" className="icon-btn" onClick={onClose}>
+              ✕
+            </button>
+          </div>
+          <div className="summary-pdf-fallback">Loading detailed airport info...</div>
+        </div>
+      </div>
+    );
+  }
+
   const leg1 = hasRequiredAirports ? haversine(home.lat, home.lon, first.lat, first.lon) : 0;
   const leg2 = hasRequiredAirports && second ? haversine(first.lat, first.lon, second.lat, second.lon) : 0;
   const leg3 = hasRequiredAirports ? (second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1) : 0;
@@ -913,24 +931,6 @@ export default function SummaryModal({
     ...distanceLines,
     ...airportSections.map((section) => `${section.label}:${section.code}`),
   ].join('|');
-
-  if (!hasRequiredSelection) return null;
-  if (!hasRequiredAirports) return null;
-  if (!detailsReady) {
-    return (
-      <div className="modal-backdrop" onClick={onClose}>
-        <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h2>Trip Summary</h2>
-            <button type="button" className="icon-btn" onClick={onClose}>
-              ✕
-            </button>
-          </div>
-          <div className="summary-pdf-fallback">Loading detailed airport info...</div>
-        </div>
-      </div>
-    );
-  }
 
   const handleShare = async () => {
     if (!shareSupported || sharing) return;
