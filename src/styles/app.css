@@ -296,8 +296,7 @@ details { margin-bottom: .65rem; }
 .segmented button,
 .primary-btn,
 .secondary-btn,
-.icon-btn,
-.sheet-actions button {
+.icon-btn {
   min-height: 44px;
   border-radius: 14px;
   border: 1px solid #cbd5e1;
