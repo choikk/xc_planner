@@ -1156,6 +1156,8 @@ export default function SummaryModal({
     'Leg Distances:',
     ...distanceLines,
     '',
+    'Always review NOTAMs, weather, and current airport conditions before departure.',
+    '',
     ...airportSections.flatMap((section) => [
       sectionDivider,
       '',
