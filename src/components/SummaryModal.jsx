@@ -55,7 +55,6 @@ async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
   const failedApproaches = [];
   const letterWidth = 612;
   const letterHeight = 792;
-  const pageMargin = 24;
 
   for (const approach of selectedApproaches) {
     try {
@@ -67,13 +66,8 @@ async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
       for (let pageIndex = 0; pageIndex < approachDoc.getPageCount(); pageIndex += 1) {
         const [embeddedPage] = await summaryDoc.embedPdf(approachBuffer, [pageIndex]);
         const targetPage = summaryDoc.addPage([letterWidth, letterHeight]);
-        const fitScale = Math.min(
-          (letterWidth - (pageMargin * 2)) / embeddedPage.width,
-          (letterHeight - (pageMargin * 2)) / embeddedPage.height
-        );
-        const scale = Math.min(1, fitScale);
-        const drawWidth = embeddedPage.width * scale;
-        const drawHeight = embeddedPage.height * scale;
+        const drawWidth = embeddedPage.width;
+        const drawHeight = embeddedPage.height;
         const drawX = (letterWidth - drawWidth) / 2;
         const drawY = (letterHeight - drawHeight) / 2;
 
