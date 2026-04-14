@@ -1,5 +1,3 @@
-import { Readable } from 'node:stream';
-import { stream } from '@netlify/functions';
 import pg from 'pg';
 
 const { Client } = pg;
@@ -79,7 +77,7 @@ function compactBaseAirport(row) {
   };
 }
 
-export const handler = stream(async (event) => {
+export async function handler(event) {
   let client;
 
   try {
@@ -219,26 +217,9 @@ export const handler = stream(async (event) => {
       order by a.airport_code
     `);
 
-    const body = Readable.from(
-      (async function* streamAirports() {
-        yield `{"databaseVersion":${JSON.stringify(databaseVersion)},"airportCount":${JSON.stringify(airportCount)},"airports":[`;
-
-        let first = true;
-        for (const row of result.rows) {
-          const airport = compactBaseAirport(row);
-          if (!airport.c) continue;
-
-          if (!first) {
-            yield ',';
-          }
-
-          yield JSON.stringify(airport);
-          first = false;
-        }
-
-        yield ']}';
-      })()
-    );
+    const airports = result.rows
+      .map(compactBaseAirport)
+      .filter((airport) => airport.c);
 
     return {
       statusCode: 200,
@@ -246,7 +227,11 @@ export const handler = stream(async (event) => {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'public, max-age=300',
       },
-      body,
+      body: JSON.stringify({
+        databaseVersion,
+        airportCount,
+        airports,
+      }),
     };
   } catch (error) {
     console.error('[airport-data] ERROR =', error);
@@ -264,4 +249,4 @@ export const handler = stream(async (event) => {
       await client.end().catch(() => {});
     }
   }
-});
+}
