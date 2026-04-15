@@ -24,6 +24,13 @@ function normalizeApproach(approach) {
   };
 }
 
+function normalizeFboContact(contact) {
+  return {
+    name: contact?.name || contact?.n || '',
+    phone: contact?.phone || contact?.p || '',
+  };
+}
+
 function normalizeRunwaySummary(airport) {
   if (airport.runwaySummary) {
     return {
@@ -71,6 +78,20 @@ function normalizeApproachSummary(airport) {
 }
 
 function normalizeBaseAirport(airport) {
+  const fboContactsRaw = Array.isArray(airport.fbo_contacts)
+    ? airport.fbo_contacts
+    : Array.isArray(airport.fc)
+      ? airport.fc
+      : [];
+  const fboContacts = fboContactsRaw.map(normalizeFboContact).filter((contact) => contact.name || contact.phone);
+  const fallbackName = airport.fbo_name || airport.fboName || '';
+  const fallbackPhone = airport.fbo_phone || airport.fboPhone || '';
+  const resolvedFboContacts = fboContacts.length
+    ? fboContacts
+    : (fallbackName || fallbackPhone)
+      ? [{ name: fallbackName, phone: fallbackPhone }]
+      : [];
+
   return {
     airport_code: String(airport.airport_code || airport.code || airport.c || '').trim().toUpperCase(),
     airport_name: airport.airport_name || airport.name || airport.n || '',
@@ -82,6 +103,9 @@ function normalizeBaseAirport(airport) {
     elevation: Number(airport.elevation ?? airport.e ?? 0),
     airspace: airport.airspace || airport.airspace_class || airport.a || 'G',
     fuel: airport.fuel || airport.fuel_raw || airport.f || 'None',
+    fbo_contacts: resolvedFboContacts,
+    fbo_name: fallbackName || resolvedFboContacts[0]?.name || '',
+    fbo_phone: fallbackPhone || resolvedFboContacts[0]?.phone || '',
     runwaySummary: normalizeRunwaySummary(airport),
     approachSummary: normalizeApproachSummary(airport),
     runways: [],
@@ -101,6 +125,19 @@ function normalizeDetailedAirport(airport) {
     : Array.isArray(airport.p)
       ? airport.p
       : [];
+  const fboContactsRaw = Array.isArray(airport.fbo_contacts)
+    ? airport.fbo_contacts
+    : Array.isArray(airport.fc)
+      ? airport.fc
+      : [];
+  const fboContacts = fboContactsRaw.map(normalizeFboContact).filter((contact) => contact.name || contact.phone);
+  const fallbackName = airport.fbo_name || airport.fboName || '';
+  const fallbackPhone = airport.fbo_phone || airport.fboPhone || '';
+  const resolvedFboContacts = fboContacts.length
+    ? fboContacts
+    : (fallbackName || fallbackPhone)
+      ? [{ name: fallbackName, phone: fallbackPhone }]
+      : [];
 
   return {
     airport_code: String(airport.airport_code || airport.code || airport.c || '').trim().toUpperCase(),
@@ -111,6 +148,9 @@ function normalizeDetailedAirport(airport) {
     airspace: airport.airspace || airport.airspace_class || airport.a || 'G',
     fuel: airport.fuel || airport.fuel_raw || airport.f || 'None',
     remarks: airport.remarks || '',
+    fbo_contacts: resolvedFboContacts,
+    fbo_name: fallbackName || resolvedFboContacts[0]?.name || '',
+    fbo_phone: fallbackPhone || resolvedFboContacts[0]?.phone || '',
     runways: runwaysRaw.map(normalizeRunway).filter((runway) => runway.rwy_id),
     approaches: approachesRaw.map(normalizeApproach).filter((approach) => approach.name),
     detailsLoaded: true,

@@ -39,6 +39,16 @@ function isAllowedApproachHost(hostname) {
 }
 
 function normalizeDetailedAirport(row) {
+  const fboContacts = Array.isArray(row.fbo_contacts) ? row.fbo_contacts : safeObject(row.fbo_contacts);
+  const normalizedContacts = Array.isArray(fboContacts)
+    ? fboContacts
+        .map((contact) => ({
+          name: contact?.name || '',
+          phone: contact?.phone || '',
+        }))
+        .filter((contact) => contact.name || contact.phone)
+    : [];
+
   return {
     airport_code: String(row.airport_code || '').trim().toUpperCase(),
     airport_name: row.airport_name || '',
@@ -51,6 +61,9 @@ function normalizeDetailedAirport(row) {
     fuel: row.fuel_raw || 'None',
     airspace: row.airspace_class || 'G',
     remarks: row.remarks || '',
+    fbo_contacts: normalizedContacts,
+    fbo_name: row.fbo_name || normalizedContacts[0]?.name || '',
+    fbo_phone: row.fbo_phone || normalizedContacts[0]?.phone || '',
     runways: Array.isArray(row.runways) ? row.runways : safeObject(row.runways),
     approaches: Array.isArray(row.approaches) ? row.approaches : safeObject(row.approaches),
   };
@@ -156,6 +169,23 @@ export async function handler(event) {
     if (requestedCodes.length > 0) {
       const detailsResult = await client.query(
         `
+          with price_contacts as (
+            select
+              p.airport_code,
+              json_agg(
+                json_build_object(
+                  'name', p.fbo_name,
+                  'phone', ''
+                )
+                order by p.fbo_name
+              ) as fbo_contacts
+            from (
+              select distinct airport_code, fbo_name
+              from price_periods
+              where coalesce(nullif(fbo_name, ''), '') <> ''
+            ) p
+            group by p.airport_code
+          )
           select
             a.airport_code,
             a.airport_name,
@@ -168,6 +198,9 @@ export async function handler(event) {
             a.airspace_class,
             a.fuel_raw,
             a.remarks,
+            coalesce(pc.fbo_contacts, '[]'::json) as fbo_contacts,
+            coalesce(pc.fbo_contacts -> 0 ->> 'name', '') as fbo_name,
+            ''::text as fbo_phone,
             coalesce((
               select json_agg(
                 json_build_object(
@@ -194,6 +227,7 @@ export async function handler(event) {
               where ap.airport_code = a.airport_code
             ), '[]'::json) as approaches
           from airports_v2 a
+          left join price_contacts pc on pc.airport_code = a.airport_code
           where a.airport_code = any($1::text[])
           order by a.airport_code
         `,

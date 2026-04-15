@@ -87,6 +87,9 @@ function MapAutoView({ homeAirport }) {
 function renderAirportPopupContent(airport, extraLines = []) {
   const approaches = Array.isArray(airport.approaches) ? airport.approaches : [];
   const runways = Array.isArray(airport.runways) ? airport.runways : [];
+  const fboContacts = Array.isArray(airport.fbo_contacts)
+    ? airport.fbo_contacts.filter((contact) => contact?.name || contact?.phone)
+    : [];
   const detailsLoaded = Boolean(airport.detailsLoaded);
 
   return (
@@ -96,6 +99,12 @@ function renderAirportPopupContent(airport, extraLines = []) {
       </div>
       <div>{airport.airport_name}</div>
       <div>Fuel: {airport.fuel}</div>
+      {fboContacts.map((contact, index) => (
+        <div key={`${airport.airport_code}-fbo-${index}`}>
+          FBO{fboContacts.length > 1 ? ` ${index + 1}` : ''}: {contact.name}
+          {' '}(Ph. {contact.phone || ''})
+        </div>
+      ))}
       {extraLines.map((line, idx) => (
         <div key={idx}>{line}</div>
       ))}
