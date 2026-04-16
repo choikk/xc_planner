@@ -175,12 +175,12 @@ export async function handler(event) {
               json_agg(
                 json_build_object(
                   'name', p.fbo_name,
-                  'phone', ''
+                  'phone', coalesce(p.fbo_phone, '')
                 )
-                order by p.fbo_name
+                order by p.fbo_name, coalesce(p.fbo_phone, '')
               ) as fbo_contacts
             from (
-              select distinct airport_code, fbo_name
+              select distinct airport_code, fbo_name, fbo_phone
               from price_periods
               where coalesce(nullif(fbo_name, ''), '') <> ''
             ) p
@@ -200,7 +200,7 @@ export async function handler(event) {
             a.remarks,
             coalesce(pc.fbo_contacts, '[]'::json) as fbo_contacts,
             coalesce(pc.fbo_contacts -> 0 ->> 'name', '') as fbo_name,
-            ''::text as fbo_phone,
+            coalesce(pc.fbo_contacts -> 0 ->> 'phone', '') as fbo_phone,
             coalesce((
               select json_agg(
                 json_build_object(
