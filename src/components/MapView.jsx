@@ -201,6 +201,7 @@ export default function MapView({
 }) {
   const [infoPopup, setInfoPopup] = useState(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [touchMode, setTouchMode] = useState(false);
   const suppressBackgroundResetRef = useRef(false);
 
   const homeCenter = useMemo(() => {
@@ -250,6 +251,22 @@ export default function MapView({
 
     const media = window.matchMedia('(max-width: 560px)');
     const update = () => setLegendCollapsed(media.matches);
+    update();
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const media = window.matchMedia('(hover: none), (pointer: coarse)');
+    const update = () => setTouchMode(media.matches || window.navigator.maxTouchPoints > 0);
     update();
 
     if (typeof media.addEventListener === 'function') {
@@ -317,6 +334,7 @@ export default function MapView({
     suppressBackgroundResetRef.current = true;
     stopLeafletEvent(event);
   };
+  const showHoverTooltips = !touchMode;
 
   const innerEllipse = useMemo(() => {
     if (
@@ -442,9 +460,11 @@ export default function MapView({
               weight: 1.25,
             }}
           >
-            <Tooltip direction="top" offset={[0, -8]}>
-              {result.code}
-            </Tooltip>
+            {showHoverTooltips && (
+              <Tooltip direction="top" offset={[0, -8]}>
+                {result.code}
+              </Tooltip>
+            )}
             <Popup minWidth={290} maxWidth={480}>
               {renderAirportPopupContent(airport, [
                 `Distance: ${result.distance.toFixed(1)} NM`,
@@ -479,9 +499,11 @@ export default function MapView({
               weight: 1.5,
             }}
           >
-            <Tooltip direction="top" offset={[0, -8]}>
-              {result.code}
-            </Tooltip>
+            {showHoverTooltips && (
+              <Tooltip direction="top" offset={[0, -8]}>
+                {result.code}
+              </Tooltip>
+            )}
             <Popup minWidth={290} maxWidth={480}>
               {renderAirportPopupContent(airport, [
                 `Distance: ${result.distance.toFixed(1)} NM`,
@@ -578,9 +600,11 @@ export default function MapView({
               weight: selected ? 3 : 2,
             }}
           >
-            <Tooltip direction="top" offset={[0, -8]}>
-              {result.code}
-            </Tooltip>
+            {showHoverTooltips && (
+              <Tooltip direction="top" offset={[0, -8]}>
+                {result.code}
+              </Tooltip>
+            )}
           </CircleMarker>
         );
       })}
@@ -607,9 +631,11 @@ export default function MapView({
               touchstart: handleSecondLegSelect,
             }}
           >
-            <Tooltip direction="top" offset={[0, -8]}>
-              {result.code}
-            </Tooltip>
+            {showHoverTooltips && (
+              <Tooltip direction="top" offset={[0, -8]}>
+                {result.code}
+              </Tooltip>
+            )}
           </Marker>
         );
       })}
