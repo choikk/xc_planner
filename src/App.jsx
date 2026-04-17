@@ -370,6 +370,7 @@ export default function App() {
           activeLegInfo={activeLegInfo}
           onSelectFirstLeg={handleSelectFirstLegOnMap}
           onSelectSecondLeg={handleSelectSecondLeg}
+          onClearSelections={handleMapReset}
           onOpenSummary={() => setSummaryOpen(true)}
           airportData={airportData}
           onRequestAirportDetails={loadAirportDetails}

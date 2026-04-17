@@ -11,6 +11,7 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import L from 'leaflet';
 import { computeEllipsePoints, formatSurface, getAirspaceColor, haversine } from '../utils/geo';
@@ -80,6 +81,17 @@ function MapAutoView({ homeAirport }) {
 
     map.setView([homeAirport.lat, homeAirport.lon], 7);
   }, [map, homeCode, homeAirport?.lat, homeAirport?.lon]);
+
+  return null;
+}
+
+function MapBackgroundReset({ enabled, onBackgroundClick }) {
+  useMapEvents({
+    click() {
+      if (!enabled) return;
+      onBackgroundClick?.();
+    },
+  });
 
   return null;
 }
@@ -172,6 +184,7 @@ export default function MapView({
   activeLegInfo,
   onSelectFirstLeg,
   onSelectSecondLeg,
+  onClearSelections,
   onOpenSummary,
   airportData,
   onRequestAirportDetails,
@@ -351,6 +364,10 @@ export default function MapView({
 
       <MapAutoView
         homeAirport={homeAirport}
+      />
+      <MapBackgroundReset
+        enabled={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
+        onBackgroundClick={onClearSelections}
       />
 
       <Pane name="ellipsePane" style={{ zIndex: 250 }} />
