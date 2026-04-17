@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Circle,
   CircleMarker,
@@ -72,6 +72,12 @@ function isFiniteCoord(lat, lon) {
   return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
 }
 
+function stopLeafletEvent(event) {
+  if (event?.originalEvent) {
+    L.DomEvent.stop(event.originalEvent);
+  }
+}
+
 function MapAutoView({ homeAirport }) {
   const map = useMap();
   const homeCode = homeAirport?.airport_code || '';
@@ -85,9 +91,13 @@ function MapAutoView({ homeAirport }) {
   return null;
 }
 
-function MapBackgroundReset({ enabled, onBackgroundClick }) {
+function MapBackgroundReset({ enabled, onBackgroundClick, suppressResetRef }) {
   useMapEvents({
     click() {
+      if (suppressResetRef?.current) {
+        suppressResetRef.current = false;
+        return;
+      }
       if (!enabled) return;
       onBackgroundClick?.();
     },
@@ -191,6 +201,7 @@ export default function MapView({
 }) {
   const [infoPopup, setInfoPopup] = useState(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const suppressBackgroundResetRef = useRef(false);
 
   const homeCenter = useMemo(() => {
     if (homeAirport && isFiniteCoord(homeAirport.lat, homeAirport.lon)) {
@@ -302,6 +313,11 @@ export default function MapView({
     firstLegDistance,
   ]);
 
+  const markMapInteraction = (event) => {
+    suppressBackgroundResetRef.current = true;
+    stopLeafletEvent(event);
+  };
+
   const innerEllipse = useMemo(() => {
     if (
       !homeAirport ||
@@ -368,13 +384,20 @@ export default function MapView({
       <MapBackgroundReset
         enabled={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
         onBackgroundClick={onClearSelections}
+        suppressResetRef={suppressBackgroundResetRef}
       />
 
       <Pane name="ellipsePane" style={{ zIndex: 250 }} />
 
       {homeAirport && isFiniteCoord(homeAirport.lat, homeAirport.lon) && (
         <>
-          <Marker position={homeCenter} icon={homeIcon}>
+          <Marker
+            position={homeCenter}
+            icon={homeIcon}
+            eventHandlers={{
+              click: markMapInteraction,
+            }}
+          >
             <Popup>
               <strong>{homeAirport.airport_code}</strong>
               <br />
@@ -408,6 +431,7 @@ export default function MapView({
             center={[airport.lat, airport.lon]}
             radius={5}
             eventHandlers={{
+              click: markMapInteraction,
               popupopen: () => onRequestAirportDetails?.(result.code),
             }}
             pathOptions={{
@@ -444,9 +468,7 @@ export default function MapView({
             center={[airport.lat, airport.lon]}
             radius={5}
             eventHandlers={{
-              click: (event) => {
-                L.DomEvent.stop(event.originalEvent);
-              },
+              click: markMapInteraction,
               popupopen: () => onRequestAirportDetails?.(result.code),
             }}
             pathOptions={{
@@ -534,6 +556,11 @@ export default function MapView({
 
         const selected = selectedFirstLegCode === result.code;
         const color = getAirspaceColor(airport.airspace);
+        const handleFirstLegSelect = (event) => {
+          markMapInteraction(event);
+          setInfoPopup(null);
+          onSelectFirstLeg(result.code);
+        };
 
         return (
           <CircleMarker
@@ -541,10 +568,8 @@ export default function MapView({
             center={[airport.lat, airport.lon]}
             radius={selected ? 9 : 7}
             eventHandlers={{
-              click: () => {
-                setInfoPopup(null);
-                onSelectFirstLeg(result.code);
-              },
+              click: handleFirstLegSelect,
+              touchstart: handleFirstLegSelect,
             }}
             pathOptions={{
               color,
@@ -566,6 +591,11 @@ export default function MapView({
         if (!isFiniteCoord(airport.lat, airport.lon)) return null;
 
         const selected = selectedSecondLegCode === result.code;
+        const handleSecondLegSelect = (event) => {
+          markMapInteraction(event);
+          setInfoPopup(null);
+          onSelectSecondLeg(result.code);
+        };
 
         return (
           <Marker
@@ -573,10 +603,8 @@ export default function MapView({
             position={[airport.lat, airport.lon]}
             icon={squareDivIcon(getAirspaceColor(airport.airspace), selected)}
             eventHandlers={{
-              click: () => {
-                setInfoPopup(null);
-                onSelectSecondLeg(result.code);
-              },
+              click: handleSecondLegSelect,
+              touchstart: handleSecondLegSelect,
             }}
           >
             <Tooltip direction="top" offset={[0, -8]}>
@@ -596,7 +624,7 @@ export default function MapView({
           zIndexOffset={1000}
           eventHandlers={{
             click: (event) => {
-              L.DomEvent.stop(event.originalEvent);
+              markMapInteraction(event);
               setInfoPopup({ type: 'first', code: selectedFirstLegCode });
             },
           }}
@@ -613,7 +641,7 @@ export default function MapView({
           zIndexOffset={1000}
           eventHandlers={{
             click: (event) => {
-              L.DomEvent.stop(event.originalEvent);
+              markMapInteraction(event);
               setInfoPopup({ type: 'second', code: selectedSecondLegCode });
             },
           }}
