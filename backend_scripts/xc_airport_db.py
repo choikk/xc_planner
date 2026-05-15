@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
 import sys
 import ssl
+import re
 import shutil
 import zipfile
 import json
@@ -11,13 +13,14 @@ from io import BytesIO
 from pathlib import Path
 from datetime import datetime
 from urllib.request import urlopen
+from collections import defaultdict
 
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from psycopg import connect
 
-DATABASE_URL = os.environ["NEON_DATABASE_URL"]
+DATABASE_URL = os.environ.get("NEON_DATABASE_URL")
 
 BASE_PATH = Path(__file__).resolve().parent
 TMP_ROOT = BASE_PATH / "json_data" / "tmp"
@@ -64,9 +67,44 @@ def ensure_metadata_table(cur):
         CREATE TABLE IF NOT EXISTS dataset_versions (
             dataset_name text PRIMARY KEY,
             effective_date text NOT NULL,
+            faa_cycle text,
+            airport_count integer,
+            runway_count integer,
+            approach_airport_count integer,
+            approach_count integer,
+            log jsonb,
+            details jsonb,
             updated_at timestamptz NOT NULL DEFAULT NOW()
         )
     """)
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS faa_cycle text")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS airport_count integer")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS runway_count integer")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS approach_airport_count integer")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS approach_count integer")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS log jsonb")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS details jsonb")
+    cur.execute("ALTER TABLE dataset_versions ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT NOW()")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS airport_dataset_history (
+            id bigserial PRIMARY KEY,
+            dataset_name text NOT NULL,
+            effective_date text NOT NULL,
+            faa_cycle text,
+            airport_count integer,
+            runway_count integer,
+            approach_airport_count integer,
+            approach_count integer,
+            started_at timestamptz,
+            finished_at timestamptz NOT NULL DEFAULT NOW(),
+            status text NOT NULL,
+            message text,
+            details jsonb
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airport_dataset_history_dataset_name ON airport_dataset_history (dataset_name)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airport_dataset_history_finished_at ON airport_dataset_history (finished_at)")
 
 
 def get_stored_effective_date(cur, dataset_name: str) -> str | None:
@@ -80,6 +118,19 @@ def get_stored_effective_date(cur, dataset_name: str) -> str | None:
     )
     row = cur.fetchone()
     return row[0] if row else None
+
+
+def get_navigation_table_counts(cur) -> dict[str, int]:
+    counts = {}
+    for table_name in (
+        "fixes_v2",
+        "navaids_v2",
+        "airway_segments_v2",
+        "airway_segment_altitudes_v2",
+    ):
+        cur.execute(f"SELECT COUNT(*) FROM {table_name}")
+        counts[table_name] = int(cur.fetchone()[0])
+    return counts
 
 
 def save_effective_date_with_stats(cur, dataset_name, effective_date, cycle, airport_count, approach_count):
@@ -117,7 +168,6 @@ def save_effective_date_with_stats(cur, dataset_name, effective_date, cycle, air
         ),
     )
 
-import json
 from datetime import datetime, timezone
 
 def now_utc():
@@ -251,8 +301,130 @@ def download_and_extract_csv_data(url: str, extract_root: Path):
     secondary_zip.unlink()
 
 
+def normalize_column_name(name: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", str(name).strip().upper()).strip("_")
+
+
+def load_csv_group(path: Path, filename: str) -> pd.DataFrame:
+    file_path = path / filename
+    if not file_path.exists():
+        return pd.DataFrame()
+
+    df = pd.read_csv(file_path, dtype=str).fillna("")
+    df.columns = [normalize_column_name(column) for column in df.columns]
+    return df
+
+
+def clean_text(value) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text or text.lower() == "nan":
+        return ""
+    return text
+
+
+def first_nonempty(record: dict, *candidates: str) -> str:
+    for candidate in candidates:
+        value = clean_text(record.get(candidate))
+        if value:
+            return value
+    return ""
+
+
+def to_float_or_none(value):
+    text = clean_text(value)
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def to_int_or_none(value):
+    text = clean_text(value)
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+def parse_dms_coordinate(value):
+    text = clean_text(value).replace(" ", "")
+    if not text:
+        return None
+
+    match = re.fullmatch(r"(\d+)-(\d+)-([\d.]+)([NSEW])", text)
+    if not match:
+        return None
+
+    degrees = int(match.group(1))
+    minutes = int(match.group(2))
+    seconds = float(match.group(3))
+    hemisphere = match.group(4)
+    decimal = degrees + (minutes / 60) + (seconds / 3600)
+    if hemisphere in ("S", "W"):
+        decimal *= -1
+    return decimal
+
+
+def extract_coordinate(record: dict, decimal_candidates: list[str], dms_candidates: list[str]):
+    for candidate in decimal_candidates:
+        value = to_float_or_none(record.get(candidate))
+        if value is not None:
+            return value
+
+    for candidate in dms_candidates:
+        value = parse_dms_coordinate(record.get(candidate))
+        if value is not None:
+            return value
+
+    return None
+
+
+def dataframe_records(df: pd.DataFrame) -> list[dict]:
+    if df.empty:
+        return []
+    return [{column: clean_text(value) for column, value in row.items()} for row in df.to_dict(orient="records")]
+
+
+def group_records(records: list[dict], *key_candidates: str) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for record in records:
+        key = first_nonempty(record, *key_candidates).upper()
+        if key:
+            grouped[key].append(record)
+    return dict(grouped)
+
+
+def collect_matching_values(record: dict, patterns: list[str]) -> list[str]:
+    values = []
+    for key, value in record.items():
+        normalized_key = normalize_column_name(key)
+        if any(pattern in normalized_key for pattern in patterns):
+            cleaned = clean_text(value)
+            if cleaned:
+                values.append(cleaned)
+    return values
+
+
+def unique_join(values: list[str]) -> str:
+    seen = set()
+    ordered = []
+    for value in values:
+        cleaned = clean_text(value)
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        ordered.append(cleaned)
+    return ", ".join(ordered)
+
+
 def load_airport_base(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path / "APT_BASE.csv", dtype=str)
+    df = load_csv_group(path, "APT_BASE.csv")
     df = df[df["SITE_TYPE_CODE"].fillna("").str.upper() == "A"].copy()
 
     df["ICAO_ID"] = df["ICAO_ID"].fillna("").str.strip().str.upper()
@@ -270,7 +442,7 @@ def load_airport_base(path: Path) -> pd.DataFrame:
 
 
 def load_runways(path: Path) -> dict[str, list[dict]]:
-    df = pd.read_csv(path / "APT_RWY.csv", dtype=str)
+    df = load_csv_group(path, "APT_RWY.csv")
     df = df[["SITE_NO", "RWY_ID", "RWY_LEN", "RWY_WIDTH", "SURFACE_TYPE_CODE", "COND"]].copy()
     df["COND"] = df["COND"].fillna("").str.strip().str.upper()
     df["SURFACE_TYPE_CODE"] = df["SURFACE_TYPE_CODE"].fillna("").str.strip().str.upper()
@@ -312,7 +484,7 @@ def determine_airspace(row) -> str:
 
 
 def load_airspace(path: Path) -> dict[str, dict]:
-    df = pd.read_csv(path / "CLS_ARSP.csv", dtype=str)
+    df = load_csv_group(path, "CLS_ARSP.csv")
     df["REMARK"] = df["REMARK"].fillna("").str.strip()
 
     airspace_info: dict[str, dict] = {}
@@ -425,6 +597,240 @@ def build_airport_data(df_base, rwy_dict, airspace_info, approach_dict):
     return airport_data
 
 
+def load_fixes(path: Path) -> dict[str, dict]:
+    base_records = dataframe_records(load_csv_group(path, "FIX_BASE.csv"))
+    chart_records = group_records(dataframe_records(load_csv_group(path, "FIX_CHRT.csv")), "FIX_ID")
+    nav_records = group_records(dataframe_records(load_csv_group(path, "FIX_NAV.csv")), "FIX_ID")
+
+    fixes = {}
+
+    for record in base_records:
+        fix_id = first_nonempty(record, "FIX_ID").upper()
+        if not fix_id:
+            continue
+
+        lat = extract_coordinate(
+            record,
+            ["LAT_DECIMAL", "FIX_LAT_DECIMAL", "FIX_ID_LAT_DECIMAL"],
+            ["FIX_LAT", "LATITUDE", "LAT"],
+        )
+        lon = extract_coordinate(
+            record,
+            ["LONG_DECIMAL", "LON_DECIMAL", "FIX_LONG_DECIMAL", "FIX_ID_LONG_DECIMAL"],
+            ["FIX_LONG", "LONGITUDE", "LON", "LONG"],
+        )
+        if lat is None or lon is None:
+            continue
+
+        related_chart_records = chart_records.get(fix_id, [])
+        related_nav_records = nav_records.get(fix_id, [])
+        charts = unique_join(
+            [first_nonempty(record, "CHARTS")]
+            + [first_nonempty(chart_record, "CHARTING_TYPE_DESC", "CHARTS") for chart_record in related_chart_records]
+        )
+        chart_info = unique_join([
+            *[first_nonempty(nav_record, "CHART_INFO", "CHART_INFO_DESC") for nav_record in related_nav_records],
+            *[value for nav_record in related_nav_records for value in collect_matching_values(nav_record, ["CHART_INFO"])],
+        ])
+        nav_makeup = unique_join([
+            *[value for nav_record in related_nav_records for value in collect_matching_values(nav_record, ["MAKEUP"])],
+            *[value for nav_record in related_nav_records for value in collect_matching_values(nav_record, ["NAV"])],
+        ])
+
+        fixes[fix_id] = {
+            "fix_id": fix_id,
+            "fix_use_code": first_nonempty(record, "FIX_USE_CODE", "FIX_USE"),
+            "state_code": first_nonempty(record, "STATE_CODE"),
+            "artcc": first_nonempty(record, "ARTCC"),
+            "lat": lat,
+            "lon": lon,
+            "charts": charts,
+            "chart_info": chart_info,
+            "nav_makeup": nav_makeup,
+            "description": first_nonempty(record, "DESCRIPTION", "FIX_DESCRIPTION"),
+            "raw_json": {
+                "base": record,
+                "chart_rows": related_chart_records,
+                "nav_rows": related_nav_records,
+            },
+        }
+
+    return fixes
+
+
+def load_navaids(path: Path) -> dict[str, dict]:
+    records = dataframe_records(load_csv_group(path, "NAV_BASE.csv"))
+    navaids = {}
+
+    for record in records:
+        nav_id = first_nonempty(record, "NAV_ID", "IDENT", "ID").upper()
+        if not nav_id:
+            continue
+
+        lat = extract_coordinate(
+            record,
+            ["LAT_DECIMAL", "NAV_LAT_DECIMAL"],
+            ["LATITUDE", "LAT", "NAV_LAT"],
+        )
+        lon = extract_coordinate(
+            record,
+            ["LONG_DECIMAL", "LON_DECIMAL", "NAV_LONG_DECIMAL"],
+            ["LONGITUDE", "LONG", "LON", "NAV_LONG"],
+        )
+        if lat is None or lon is None:
+            continue
+
+        navaids[nav_id] = {
+            "nav_id": nav_id,
+            "facility_name": first_nonempty(record, "NAV_NAME", "FACILITY_NAME", "NAME"),
+            "nav_type": first_nonempty(record, "NAV_TYPE", "NAV_TYPE_CODE", "FACILITY_TYPE", "TYPE"),
+            "state_code": first_nonempty(record, "STATE_CODE"),
+            "city": first_nonempty(record, "CITY"),
+            "lat": lat,
+            "lon": lon,
+            "frequency": first_nonempty(record, "FREQUENCY", "FREQ", "FREQUENCY_MHZ"),
+            "channel": first_nonempty(record, "CHANNEL", "TACAN_CHANNEL"),
+            "magnetic_variation": first_nonempty(record, "MAGNETIC_VARIATION", "MAG_VAR", "MAGNETIC_VAR"),
+            "service_volume": unique_join([
+                first_nonempty(record, "SERVICE_VOLUME", "SERVICE_VOLUME_CODE"),
+                first_nonempty(record, "CLASS", "CLASS_CODE"),
+            ]),
+            "voice": first_nonempty(record, "VOICE_FEATURE", "VOICE", "VOICE_CODE"),
+            "raw_json": record,
+        }
+
+    return navaids
+
+
+def load_airway_routes(path: Path) -> dict[str, dict]:
+    records = dataframe_records(load_csv_group(path, "AWY_BASE.csv"))
+    routes = {}
+
+    for record in records:
+        designation = first_nonempty(record, "AWY_ID", "DESIGNATION", "AIRWAY_ID").upper()
+        if not designation:
+            continue
+
+        routes[designation] = {
+            "designation": designation,
+            "route_type": designation[:1],
+            "airway_designation": first_nonempty(record, "AWY_DESIGNATION"),
+            "airway_location": first_nonempty(record, "AWY_LOCATION"),
+            "regulatory": first_nonempty(record, "REGULATORY"),
+            "remark": first_nonempty(record, "REMARK"),
+            "airway_string": first_nonempty(record, "AIRWAY_STRING"),
+            "raw_json": record,
+        }
+
+    return routes
+
+
+def build_airway_coordinate_lookup(
+    fixes: dict[str, dict],
+    navaids: dict[str, dict],
+) -> dict[str, tuple[float, float]]:
+    coordinates = {}
+
+    for record in fixes.values():
+        fix_id = clean_text(record.get("fix_id")).upper()
+        lat = record.get("lat")
+        lon = record.get("lon")
+        if fix_id and lat is not None and lon is not None:
+            coordinates[fix_id] = (lat, lon)
+
+    for record in navaids.values():
+        nav_id = clean_text(record.get("nav_id")).upper()
+        lat = record.get("lat")
+        lon = record.get("lon")
+        if nav_id and lat is not None and lon is not None and nav_id not in coordinates:
+            coordinates[nav_id] = (lat, lon)
+
+    return coordinates
+
+
+def load_airway_segments(path: Path, coordinate_lookup: dict[str, tuple[float, float]]) -> list[dict]:
+    records = dataframe_records(load_csv_group(path, "AWY_SEG_ALT.csv"))
+    segments = []
+
+    for record in records:
+        designation = first_nonempty(record, "AWY_ID", "DESIGNATION", "AIRWAY_ID").upper()
+        point_seq = to_int_or_none(first_nonempty(record, "POINT_SEQ", "PT_SEQ", "SEQUENCE_NUMBER"))
+        if not designation or point_seq is None:
+            continue
+
+        from_point = first_nonempty(record, "FROM_POINT", "POINT_NAME", "FIX_ID").upper()
+        lat = None
+        lon = None
+        if from_point and from_point in coordinate_lookup:
+            lat, lon = coordinate_lookup[from_point]
+
+        segments.append({
+            "designation": designation,
+            "route_type": designation[:1],
+            "point_seq": point_seq,
+            "from_point": from_point,
+            "from_point_type": first_nonempty(record, "FROM_PT_TYPE", "POINT_TYPE", "FIX_TYPE").strip(),
+            "to_point": first_nonempty(record, "TO_POINT").upper(),
+            "state_code": first_nonempty(record, "STATE_CODE"),
+            "lat": lat,
+            "lon": lon,
+            "segment_course": first_nonempty(record, "MAG_COURSE", "SEG_MAG_COURSE", "SEGMENT_MAG_COURSE"),
+            "segment_course_opposite": first_nonempty(record, "OPP_MAG_COURSE", "SEG_MAG_COURSE_OPPOSITE", "SEGMENT_MAG_COURSE_OPPOSITE"),
+            "next_point_distance_nm": to_float_or_none(first_nonempty(record, "MAG_COURSE_DIST", "NEXT_POINT_DIST_SEG", "NEXT_POINT_DISTANCE_SEG")),
+            "dog_leg": first_nonempty(record, "DOGLEG", "DOG_LEG"),
+            "raw_json": record,
+        })
+
+    return segments
+
+
+def load_airway_segment_altitudes(path: Path) -> list[dict]:
+    records = dataframe_records(load_csv_group(path, "AWY_SEG_ALT.csv"))
+    altitudes = []
+
+    for record in records:
+        designation = first_nonempty(record, "AWY_ID", "DESIGNATION", "AIRWAY_ID").upper()
+        point_seq = to_int_or_none(first_nonempty(record, "POINT_SEQ", "PT_SEQ", "SEQUENCE_NUMBER"))
+        if not designation or point_seq is None:
+            continue
+
+        altitudes.append({
+            "designation": designation,
+            "route_type": designation[:1],
+            "point_seq": point_seq,
+            "point_name": first_nonempty(record, "FROM_POINT", "POINT_NAME", "FIX_ID").upper(),
+            "point_ident": first_nonempty(record, "FROM_POINT", "NAV_ID", "FIX_ID", "POINT_IDENT").upper(),
+            "point_type": first_nonempty(record, "FROM_PT_TYPE", "POINT_TYPE", "FIX_TYPE").strip(),
+            "minimum_altitude": first_nonempty(
+                record,
+                "MIN_ENROUTE_ALT",
+                "GPS_MIN_ENROUTE_ALT",
+                "MIN_ALTITUDE",
+                "MEA",
+                "MINIMUM_ENROUTE_ALTITUDE",
+                "ALTITUDE_LOW",
+            ),
+            "maximum_altitude": first_nonempty(
+                record,
+                "MAX_AUTH_ALT",
+                "MAX_ALTITUDE",
+                "MAA",
+                "MAXIMUM_ALTITUDE",
+                "ALTITUDE_HIGH",
+            ),
+            "direction_of_flight": first_nonempty(
+                record,
+                "MIN_ENROUTE_ALT_DIR",
+                "GPS_MIN_ENROUTE_ALT_DIR",
+                "DIRECTION_OF_FLIGHT",
+                "DIRECTION",
+            ),
+            "raw_json": record,
+        })
+
+    return altitudes
+
+
 def ensure_v2_tables_exist(cur):
     cur.execute("""
         CREATE TABLE IF NOT EXISTS airports_v2 (
@@ -491,6 +897,292 @@ def ensure_v2_tables_exist(cur):
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_airport_approaches_v2_airport_name
         ON airport_approaches_v2 (airport_code, approach_name)
     """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS fixes_v2 (
+            fix_id text PRIMARY KEY,
+            fix_use_code text,
+            state_code text,
+            artcc text,
+            lat double precision NOT NULL,
+            lon double precision NOT NULL,
+            charts text,
+            chart_info text,
+            nav_makeup text,
+            description text,
+            raw_json jsonb
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_fixes_v2_state ON fixes_v2 (state_code)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_fixes_v2_artcc ON fixes_v2 (artcc)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS navaids_v2 (
+            nav_id text PRIMARY KEY,
+            facility_name text,
+            nav_type text,
+            state_code text,
+            city text,
+            lat double precision NOT NULL,
+            lon double precision NOT NULL,
+            frequency text,
+            channel text,
+            magnetic_variation text,
+            service_volume text,
+            voice text,
+            raw_json jsonb
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_navaids_v2_type ON navaids_v2 (nav_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_navaids_v2_state ON navaids_v2 (state_code)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS airway_routes_v2 (
+            designation text PRIMARY KEY,
+            route_type text,
+            airway_designation text,
+            airway_location text,
+            regulatory text,
+            remark text,
+            airway_string text,
+            raw_json jsonb
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_routes_v2_route_type ON airway_routes_v2 (route_type)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS airway_segments_v2 (
+            designation text NOT NULL,
+            route_type text,
+            point_seq integer NOT NULL,
+            from_point text,
+            from_point_type text,
+            to_point text,
+            state_code text,
+            lat double precision,
+            lon double precision,
+            segment_course text,
+            segment_course_opposite text,
+            next_point_distance_nm double precision,
+            dog_leg text,
+            raw_json jsonb,
+            PRIMARY KEY (designation, point_seq)
+        )
+    """)
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS route_type text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS from_point text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS from_point_type text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS to_point text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS state_code text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS lat double precision")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS lon double precision")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS segment_course text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS segment_course_opposite text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS next_point_distance_nm double precision")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS dog_leg text")
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS raw_json jsonb")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_segments_v2_route_type ON airway_segments_v2 (route_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_segments_v2_from_point ON airway_segments_v2 (from_point)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_segments_v2_to_point ON airway_segments_v2 (to_point)")
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS airway_segment_altitudes_v2 (
+            id bigserial PRIMARY KEY,
+            designation text NOT NULL,
+            route_type text,
+            point_seq integer NOT NULL,
+            point_name text,
+            point_ident text,
+            point_type text,
+            minimum_altitude text,
+            maximum_altitude text,
+            direction_of_flight text,
+            raw_json jsonb
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_segment_altitudes_v2_designation ON airway_segment_altitudes_v2 (designation, point_seq)")
+
+
+def refresh_fixes_v2(cur, fixes: dict[str, dict]):
+    cur.execute("TRUNCATE TABLE fixes_v2")
+    for record in fixes.values():
+        cur.execute(
+            """
+            INSERT INTO fixes_v2 (
+                fix_id,
+                fix_use_code,
+                state_code,
+                artcc,
+                lat,
+                lon,
+                charts,
+                chart_info,
+                nav_makeup,
+                description,
+                raw_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                record.get("fix_id"),
+                record.get("fix_use_code"),
+                record.get("state_code"),
+                record.get("artcc"),
+                record.get("lat"),
+                record.get("lon"),
+                record.get("charts"),
+                record.get("chart_info"),
+                record.get("nav_makeup"),
+                record.get("description"),
+                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
+            ),
+        )
+
+
+def refresh_navaids_v2(cur, navaids: dict[str, dict]):
+    cur.execute("TRUNCATE TABLE navaids_v2")
+    for record in navaids.values():
+        cur.execute(
+            """
+            INSERT INTO navaids_v2 (
+                nav_id,
+                facility_name,
+                nav_type,
+                state_code,
+                city,
+                lat,
+                lon,
+                frequency,
+                channel,
+                magnetic_variation,
+                service_volume,
+                voice,
+                raw_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                record.get("nav_id"),
+                record.get("facility_name"),
+                record.get("nav_type"),
+                record.get("state_code"),
+                record.get("city"),
+                record.get("lat"),
+                record.get("lon"),
+                record.get("frequency"),
+                record.get("channel"),
+                record.get("magnetic_variation"),
+                record.get("service_volume"),
+                record.get("voice"),
+                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
+            ),
+        )
+
+
+def refresh_airway_routes_v2(cur, airway_routes: dict[str, dict]):
+    cur.execute("TRUNCATE TABLE airway_routes_v2")
+    for record in airway_routes.values():
+        cur.execute(
+            """
+            INSERT INTO airway_routes_v2 (
+                designation,
+                route_type,
+                airway_designation,
+                airway_location,
+                regulatory,
+                remark,
+                airway_string,
+                raw_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                record.get("designation"),
+                record.get("route_type"),
+                record.get("airway_designation"),
+                record.get("airway_location"),
+                record.get("regulatory"),
+                record.get("remark"),
+                record.get("airway_string"),
+                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
+            ),
+        )
+
+
+def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
+    cur.execute("TRUNCATE TABLE airway_segments_v2")
+    for record in airway_segments:
+        cur.execute(
+            """
+            INSERT INTO airway_segments_v2 (
+                designation,
+                route_type,
+                point_seq,
+                from_point,
+                from_point_type,
+                to_point,
+                state_code,
+                lat,
+                lon,
+                segment_course,
+                segment_course_opposite,
+                next_point_distance_nm,
+                dog_leg,
+                raw_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                record.get("designation"),
+                record.get("route_type"),
+                record.get("point_seq"),
+                record.get("from_point"),
+                record.get("from_point_type"),
+                record.get("to_point"),
+                record.get("state_code"),
+                record.get("lat"),
+                record.get("lon"),
+                record.get("segment_course"),
+                record.get("segment_course_opposite"),
+                record.get("next_point_distance_nm"),
+                record.get("dog_leg"),
+                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
+            ),
+        )
+
+
+def refresh_airway_segment_altitudes_v2(cur, airway_altitudes: list[dict]):
+    cur.execute("TRUNCATE TABLE airway_segment_altitudes_v2 RESTART IDENTITY")
+    for record in airway_altitudes:
+        cur.execute(
+            """
+            INSERT INTO airway_segment_altitudes_v2 (
+                designation,
+                route_type,
+                point_seq,
+                point_name,
+                point_ident,
+                point_type,
+                minimum_altitude,
+                maximum_altitude,
+                direction_of_flight,
+                raw_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            """,
+            (
+                record.get("designation"),
+                record.get("route_type"),
+                record.get("point_seq"),
+                record.get("point_name"),
+                record.get("point_ident"),
+                record.get("point_type"),
+                record.get("minimum_altitude"),
+                record.get("maximum_altitude"),
+                record.get("direction_of_flight"),
+                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
+            ),
+        )
 
 
 def sync_airports_v2(cur, airport_data: dict[str, dict]):
@@ -655,7 +1347,15 @@ def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
             )
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Import FAA airport/navigation data into Neon.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Download and parse FAA data without writing anything to the database.",
+    )
+    args = parser.parse_args(argv)
+
     started_at = now_utc()
 
     effective_date = get_current_nasr_effective_date()
@@ -670,37 +1370,55 @@ def main():
 
     dataset_name = "airports_v2_source"
 
-    # Make sure metadata tables exist and check current applied version
-    with connect(DATABASE_URL) as conn:
-        with conn.cursor() as cur:
-            ensure_metadata_table(cur)
-            ensure_v2_tables_exist(cur)
-            stored_version = get_stored_effective_date(cur, dataset_name)
+    if not args.dry_run:
+        if not DATABASE_URL:
+            raise RuntimeError("Missing NEON_DATABASE_URL")
 
-        if stored_version == effective_date:
+        # Make sure metadata tables exist and check current applied version
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                insert_history_row(
-                    cur,
-                    dataset_name=dataset_name,
-                    effective_date=effective_date,
-                    faa_cycle=cycle,
-                    airport_count=None,
-                    runway_count=None,
-                    approach_airport_count=None,
-                    approach_count=None,
-                    started_at=started_at,
-                    status="skipped",
-                    message="Database already up to date",
-                    details={"stored_version": stored_version},
-                )
-            conn.commit()
-            print(f"Database already up to date: {effective_date}")
-            return
+                ensure_metadata_table(cur)
+                ensure_v2_tables_exist(cur)
+                stored_version = get_stored_effective_date(cur, dataset_name)
+                navigation_counts = get_navigation_table_counts(cur)
+
+            navigation_backfill_ready = all(count > 0 for count in navigation_counts.values())
+
+            if stored_version == effective_date and navigation_backfill_ready:
+                with conn.cursor() as cur:
+                    insert_history_row(
+                        cur,
+                        dataset_name=dataset_name,
+                        effective_date=effective_date,
+                        faa_cycle=cycle,
+                        airport_count=None,
+                        runway_count=None,
+                        approach_airport_count=None,
+                        approach_count=None,
+                        started_at=started_at,
+                        status="skipped",
+                        message="Database already up to date",
+                        details={
+                            "stored_version": stored_version,
+                            "navigation_counts": navigation_counts,
+                        },
+                    )
+                conn.commit()
+                print(f"Database already up to date: {effective_date}")
+                return
+
+            if stored_version == effective_date and not navigation_backfill_ready:
+                print(f"Current cycle already applied, but navigation tables need backfill: {navigation_counts}")
 
     airport_count = None
     runway_count = None
     approach_airport_count = None
     approach_count = None
+    fix_count = None
+    navaid_count = None
+    airway_route_count = None
+    airway_segment_count = None
+    airway_altitude_count = None
 
     try:
         extract_root = TMP_ROOT / f"28DaySubscription_Effective_{effective_date}"
@@ -715,6 +1433,12 @@ def main():
             dtpp_base_pdf_url,
             cycle,
         )
+        fixes = load_fixes(csv_path)
+        navaids = load_navaids(csv_path)
+        airway_routes = load_airway_routes(csv_path)
+        airway_coordinate_lookup = build_airway_coordinate_lookup(fixes, navaids)
+        airway_segments = load_airway_segments(csv_path, airway_coordinate_lookup)
+        airway_altitudes = load_airway_segment_altitudes(csv_path)
 
         airport_data = build_airport_data(df_base, rwy_dict, airspace_info, approach_dict)
 
@@ -722,9 +1446,19 @@ def main():
         runway_count = sum(len(v.get("runways", [])) for v in airport_data.values())
         approach_airport_count = len(approach_dict)
         approach_count = sum(len(v) for v in approach_dict.values())
+        fix_count = len(fixes)
+        navaid_count = len(navaids)
+        airway_route_count = len(airway_routes)
+        airway_segment_count = len(airway_segments)
+        airway_altitude_count = len(airway_altitudes)
 
         print(f"Loaded {approach_airport_count} airports with approach plates from d-TPP XML (cycle {xml_cycle})")
         print(f"Built airport dataset: {airport_count} airports")
+        print(f"Loaded {fix_count} fixes")
+        print(f"Loaded {navaid_count} navaids")
+        print(f"Loaded {airway_route_count} airway routes")
+        print(f"Loaded {airway_segment_count} airway segments")
+        print(f"Loaded {airway_altitude_count} airway altitude rows")
 
         details = {
             "effective_date": effective_date,
@@ -734,12 +1468,27 @@ def main():
             "runway_count": runway_count,
             "approach_airport_count": approach_airport_count,
             "approach_count": approach_count,
+            "fix_count": fix_count,
+            "navaid_count": navaid_count,
+            "airway_route_count": airway_route_count,
+            "airway_segment_count": airway_segment_count,
+            "airway_altitude_count": airway_altitude_count,
         }
+
+        if args.dry_run:
+            print("Dry run complete. No database writes were performed.")
+            print(json.dumps(details, indent=2, ensure_ascii=False))
+            return
 
         with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 sync_airports_v2(cur, airport_data)
                 refresh_runways_and_approaches(cur, airport_data)
+                refresh_fixes_v2(cur, fixes)
+                refresh_navaids_v2(cur, navaids)
+                refresh_airway_routes_v2(cur, airway_routes)
+                refresh_airway_segments_v2(cur, airway_segments)
+                refresh_airway_segment_altitudes_v2(cur, airway_altitudes)
 
                 upsert_dataset_version(
                     cur,
@@ -771,7 +1520,7 @@ def main():
             conn.commit()
 
         print(f"Database updated successfully to {effective_date}")
-        sys.exit(1)
+        return
 
     except Exception as e:
         with connect(DATABASE_URL) as conn:
@@ -788,7 +1537,14 @@ def main():
                     started_at=started_at,
                     status="failed",
                     message=str(e),
-                    details={"error": str(e)},
+                    details={
+                        "error": str(e),
+                        "fix_count": fix_count,
+                        "navaid_count": navaid_count,
+                        "airway_route_count": airway_route_count,
+                        "airway_segment_count": airway_segment_count,
+                        "airway_altitude_count": airway_altitude_count,
+                    },
                 )
             conn.commit()
         raise
