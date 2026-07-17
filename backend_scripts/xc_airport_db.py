@@ -767,6 +767,7 @@ def load_airway_segments(path: Path, coordinate_lookup: dict[str, tuple[float, f
         segments.append({
             "designation": designation,
             "route_type": designation[:1],
+            "awy_location": first_nonempty(record, "AWY_LOCATION", "LOCATION", "REGION_CODE"),
             "point_seq": point_seq,
             "from_point": from_point,
             "from_point_type": first_nonempty(record, "FROM_PT_TYPE", "POINT_TYPE", "FIX_TYPE").strip(),
@@ -797,6 +798,7 @@ def load_airway_segment_altitudes(path: Path) -> list[dict]:
         altitudes.append({
             "designation": designation,
             "route_type": designation[:1],
+            "awy_location": first_nonempty(record, "AWY_LOCATION", "LOCATION", "REGION_CODE"),
             "point_seq": point_seq,
             "point_name": first_nonempty(record, "FROM_POINT", "POINT_NAME", "FIX_ID").upper(),
             "point_ident": first_nonempty(record, "FROM_POINT", "NAV_ID", "FIX_ID", "POINT_IDENT").upper(),
@@ -954,6 +956,7 @@ def ensure_v2_tables_exist(cur):
         CREATE TABLE IF NOT EXISTS airway_segments_v2 (
             designation text NOT NULL,
             route_type text,
+            awy_location text NOT NULL DEFAULT '',
             point_seq integer NOT NULL,
             from_point text,
             from_point_type text,
@@ -966,9 +969,13 @@ def ensure_v2_tables_exist(cur):
             next_point_distance_nm double precision,
             dog_leg text,
             raw_json jsonb,
-            PRIMARY KEY (designation, point_seq)
+            PRIMARY KEY (designation, awy_location, point_seq)
         )
     """)
+    # designation alone is not unique: the same airway id (e.g. V1) exists in
+    # separate FAA regions (C=CONUS, A=Alaska, H=Hawaii), so awy_location is part
+    # of the key. Migrate any pre-existing table off the old (designation, point_seq) PK.
+    cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS awy_location text NOT NULL DEFAULT ''")
     cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS route_type text")
     cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS from_point text")
     cur.execute("ALTER TABLE airway_segments_v2 ADD COLUMN IF NOT EXISTS from_point_type text")
@@ -990,6 +997,7 @@ def ensure_v2_tables_exist(cur):
             id bigserial PRIMARY KEY,
             designation text NOT NULL,
             route_type text,
+            awy_location text NOT NULL DEFAULT '',
             point_seq integer NOT NULL,
             point_name text,
             point_ident text,
@@ -1000,7 +1008,8 @@ def ensure_v2_tables_exist(cur):
             raw_json jsonb
         )
     """)
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_segment_altitudes_v2_designation ON airway_segment_altitudes_v2 (designation, point_seq)")
+    cur.execute("ALTER TABLE airway_segment_altitudes_v2 ADD COLUMN IF NOT EXISTS awy_location text NOT NULL DEFAULT ''")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airway_segment_altitudes_v2_designation ON airway_segment_altitudes_v2 (designation, awy_location, point_seq)")
 
 
 def refresh_fixes_v2(cur, fixes: dict[str, dict]):
@@ -1111,12 +1120,16 @@ def refresh_airway_routes_v2(cur, airway_routes: dict[str, dict]):
 
 def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
     cur.execute("TRUNCATE TABLE airway_segments_v2")
+    # Reload without the composite PK, then rebuild it (see ensure-schema note:
+    # awy_location distinguishes same-id airways across FAA regions).
+    cur.execute("ALTER TABLE airway_segments_v2 DROP CONSTRAINT IF EXISTS airway_segments_v2_pkey")
     for record in airway_segments:
         cur.execute(
             """
             INSERT INTO airway_segments_v2 (
                 designation,
                 route_type,
+                awy_location,
                 point_seq,
                 from_point,
                 from_point_type,
@@ -1130,11 +1143,12 @@ def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
                 dog_leg,
                 raw_json
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             """,
             (
                 record.get("designation"),
                 record.get("route_type"),
+                record.get("awy_location") or "",
                 record.get("point_seq"),
                 record.get("from_point"),
                 record.get("from_point_type"),
@@ -1149,6 +1163,11 @@ def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
                 json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
             ),
         )
+    cur.execute(
+        "ALTER TABLE airway_segments_v2 "
+        "ADD CONSTRAINT airway_segments_v2_pkey "
+        "PRIMARY KEY (designation, awy_location, point_seq)"
+    )
 
 
 def refresh_airway_segment_altitudes_v2(cur, airway_altitudes: list[dict]):
@@ -1159,6 +1178,7 @@ def refresh_airway_segment_altitudes_v2(cur, airway_altitudes: list[dict]):
             INSERT INTO airway_segment_altitudes_v2 (
                 designation,
                 route_type,
+                awy_location,
                 point_seq,
                 point_name,
                 point_ident,
@@ -1168,11 +1188,12 @@ def refresh_airway_segment_altitudes_v2(cur, airway_altitudes: list[dict]):
                 direction_of_flight,
                 raw_json
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             """,
             (
                 record.get("designation"),
                 record.get("route_type"),
+                record.get("awy_location") or "",
                 record.get("point_seq"),
                 record.get("point_name"),
                 record.get("point_ident"),

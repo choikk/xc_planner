@@ -177,9 +177,12 @@ CREATE INDEX IF NOT EXISTS idx_airway_routes_v2_route_type
     ON airway_routes_v2 (route_type);
 
 
+-- awy_location (C=CONUS, A=Alaska, H=Hawaii) is part of the key because the same
+-- airway id (e.g. V1) exists independently across FAA regions.
 CREATE TABLE IF NOT EXISTS airway_segments_v2 (
     designation text NOT NULL,
     route_type text,
+    awy_location text NOT NULL DEFAULT '',
     point_seq integer NOT NULL,
     from_point text,
     from_point_type text,
@@ -192,7 +195,7 @@ CREATE TABLE IF NOT EXISTS airway_segments_v2 (
     next_point_distance_nm double precision,
     dog_leg text,
     raw_json jsonb,
-    PRIMARY KEY (designation, point_seq)
+    PRIMARY KEY (designation, awy_location, point_seq)
 );
 
 CREATE INDEX IF NOT EXISTS idx_airway_segments_v2_route_type
@@ -209,6 +212,7 @@ CREATE TABLE IF NOT EXISTS airway_segment_altitudes_v2 (
     id bigserial PRIMARY KEY,
     designation text NOT NULL,
     route_type text,
+    awy_location text NOT NULL DEFAULT '',
     point_seq integer NOT NULL,
     point_name text,
     point_ident text,
@@ -220,7 +224,7 @@ CREATE TABLE IF NOT EXISTS airway_segment_altitudes_v2 (
 );
 
 CREATE INDEX IF NOT EXISTS idx_airway_segment_altitudes_v2_designation
-    ON airway_segment_altitudes_v2 (designation, point_seq);
+    ON airway_segment_altitudes_v2 (designation, awy_location, point_seq);
 
 
 CREATE TABLE IF NOT EXISTS airport_scrape_status_v2 (
