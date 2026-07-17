@@ -1014,108 +1014,117 @@ def ensure_v2_tables_exist(cur):
 
 def refresh_fixes_v2(cur, fixes: dict[str, dict]):
     cur.execute("TRUNCATE TABLE fixes_v2")
-    for record in fixes.values():
-        cur.execute(
-            """
-            INSERT INTO fixes_v2 (
-                fix_id,
-                fix_use_code,
-                state_code,
-                artcc,
-                lat,
-                lon,
-                charts,
-                chart_info,
-                nav_makeup,
-                description,
-                raw_json
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """,
-            (
-                record.get("fix_id"),
-                record.get("fix_use_code"),
-                record.get("state_code"),
-                record.get("artcc"),
-                record.get("lat"),
-                record.get("lon"),
-                record.get("charts"),
-                record.get("chart_info"),
-                record.get("nav_makeup"),
-                record.get("description"),
-                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
-            ),
+    rows = [
+        (
+            record.get("fix_id"),
+            record.get("fix_use_code"),
+            record.get("state_code"),
+            record.get("artcc"),
+            record.get("lat"),
+            record.get("lon"),
+            record.get("charts"),
+            record.get("chart_info"),
+            record.get("nav_makeup"),
+            record.get("description"),
+            json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
         )
+        for record in fixes.values()
+    ]
+    cur.executemany(
+        """
+        INSERT INTO fixes_v2 (
+            fix_id,
+            fix_use_code,
+            state_code,
+            artcc,
+            lat,
+            lon,
+            charts,
+            chart_info,
+            nav_makeup,
+            description,
+            raw_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """,
+        rows,
+    )
 
 
 def refresh_navaids_v2(cur, navaids: dict[str, dict]):
     cur.execute("TRUNCATE TABLE navaids_v2")
-    for record in navaids.values():
-        cur.execute(
-            """
-            INSERT INTO navaids_v2 (
-                nav_id,
-                facility_name,
-                nav_type,
-                state_code,
-                city,
-                lat,
-                lon,
-                frequency,
-                channel,
-                magnetic_variation,
-                service_volume,
-                voice,
-                raw_json
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """,
-            (
-                record.get("nav_id"),
-                record.get("facility_name"),
-                record.get("nav_type"),
-                record.get("state_code"),
-                record.get("city"),
-                record.get("lat"),
-                record.get("lon"),
-                record.get("frequency"),
-                record.get("channel"),
-                record.get("magnetic_variation"),
-                record.get("service_volume"),
-                record.get("voice"),
-                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
-            ),
+    rows = [
+        (
+            record.get("nav_id"),
+            record.get("facility_name"),
+            record.get("nav_type"),
+            record.get("state_code"),
+            record.get("city"),
+            record.get("lat"),
+            record.get("lon"),
+            record.get("frequency"),
+            record.get("channel"),
+            record.get("magnetic_variation"),
+            record.get("service_volume"),
+            record.get("voice"),
+            json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
         )
+        for record in navaids.values()
+    ]
+    cur.executemany(
+        """
+        INSERT INTO navaids_v2 (
+            nav_id,
+            facility_name,
+            nav_type,
+            state_code,
+            city,
+            lat,
+            lon,
+            frequency,
+            channel,
+            magnetic_variation,
+            service_volume,
+            voice,
+            raw_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """,
+        rows,
+    )
 
 
 def refresh_airway_routes_v2(cur, airway_routes: dict[str, dict]):
     cur.execute("TRUNCATE TABLE airway_routes_v2")
-    for record in airway_routes.values():
-        cur.execute(
-            """
-            INSERT INTO airway_routes_v2 (
-                designation,
-                route_type,
-                airway_designation,
-                airway_location,
-                regulatory,
-                remark,
-                airway_string,
-                raw_json
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """,
-            (
-                record.get("designation"),
-                record.get("route_type"),
-                record.get("airway_designation"),
-                record.get("airway_location"),
-                record.get("regulatory"),
-                record.get("remark"),
-                record.get("airway_string"),
-                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
-            ),
+    rows = [
+        (
+            record.get("designation"),
+            record.get("route_type"),
+            record.get("airway_designation"),
+            record.get("airway_location"),
+            record.get("regulatory"),
+            record.get("remark"),
+            record.get("airway_string"),
+            json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
         )
+        for record in airway_routes.values()
+    ]
+    cur.executemany(
+        """
+        INSERT INTO airway_routes_v2 (
+            designation,
+            route_type,
+            airway_designation,
+            airway_location,
+            regulatory,
+            remark,
+            airway_string,
+            raw_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """,
+        rows,
+    )
 
 
 def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
@@ -1123,46 +1132,49 @@ def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
     # Reload without the composite PK, then rebuild it (see ensure-schema note:
     # awy_location distinguishes same-id airways across FAA regions).
     cur.execute("ALTER TABLE airway_segments_v2 DROP CONSTRAINT IF EXISTS airway_segments_v2_pkey")
-    for record in airway_segments:
-        cur.execute(
-            """
-            INSERT INTO airway_segments_v2 (
-                designation,
-                route_type,
-                awy_location,
-                point_seq,
-                from_point,
-                from_point_type,
-                to_point,
-                state_code,
-                lat,
-                lon,
-                segment_course,
-                segment_course_opposite,
-                next_point_distance_nm,
-                dog_leg,
-                raw_json
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """,
-            (
-                record.get("designation"),
-                record.get("route_type"),
-                record.get("awy_location") or "",
-                record.get("point_seq"),
-                record.get("from_point"),
-                record.get("from_point_type"),
-                record.get("to_point"),
-                record.get("state_code"),
-                record.get("lat"),
-                record.get("lon"),
-                record.get("segment_course"),
-                record.get("segment_course_opposite"),
-                record.get("next_point_distance_nm"),
-                record.get("dog_leg"),
-                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
-            ),
+    rows = [
+        (
+            record.get("designation"),
+            record.get("route_type"),
+            record.get("awy_location") or "",
+            record.get("point_seq"),
+            record.get("from_point"),
+            record.get("from_point_type"),
+            record.get("to_point"),
+            record.get("state_code"),
+            record.get("lat"),
+            record.get("lon"),
+            record.get("segment_course"),
+            record.get("segment_course_opposite"),
+            record.get("next_point_distance_nm"),
+            record.get("dog_leg"),
+            json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
         )
+        for record in airway_segments
+    ]
+    cur.executemany(
+        """
+        INSERT INTO airway_segments_v2 (
+            designation,
+            route_type,
+            awy_location,
+            point_seq,
+            from_point,
+            from_point_type,
+            to_point,
+            state_code,
+            lat,
+            lon,
+            segment_course,
+            segment_course_opposite,
+            next_point_distance_nm,
+            dog_leg,
+            raw_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """,
+        rows,
+    )
     cur.execute(
         "ALTER TABLE airway_segments_v2 "
         "ADD CONSTRAINT airway_segments_v2_pkey "
@@ -1172,38 +1184,41 @@ def refresh_airway_segments_v2(cur, airway_segments: list[dict]):
 
 def refresh_airway_segment_altitudes_v2(cur, airway_altitudes: list[dict]):
     cur.execute("TRUNCATE TABLE airway_segment_altitudes_v2 RESTART IDENTITY")
-    for record in airway_altitudes:
-        cur.execute(
-            """
-            INSERT INTO airway_segment_altitudes_v2 (
-                designation,
-                route_type,
-                awy_location,
-                point_seq,
-                point_name,
-                point_ident,
-                point_type,
-                minimum_altitude,
-                maximum_altitude,
-                direction_of_flight,
-                raw_json
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
-            """,
-            (
-                record.get("designation"),
-                record.get("route_type"),
-                record.get("awy_location") or "",
-                record.get("point_seq"),
-                record.get("point_name"),
-                record.get("point_ident"),
-                record.get("point_type"),
-                record.get("minimum_altitude"),
-                record.get("maximum_altitude"),
-                record.get("direction_of_flight"),
-                json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
-            ),
+    rows = [
+        (
+            record.get("designation"),
+            record.get("route_type"),
+            record.get("awy_location") or "",
+            record.get("point_seq"),
+            record.get("point_name"),
+            record.get("point_ident"),
+            record.get("point_type"),
+            record.get("minimum_altitude"),
+            record.get("maximum_altitude"),
+            record.get("direction_of_flight"),
+            json.dumps(record.get("raw_json") or {}, ensure_ascii=False),
         )
+        for record in airway_altitudes
+    ]
+    cur.executemany(
+        """
+        INSERT INTO airway_segment_altitudes_v2 (
+            designation,
+            route_type,
+            awy_location,
+            point_seq,
+            point_name,
+            point_ident,
+            point_type,
+            minimum_altitude,
+            maximum_altitude,
+            direction_of_flight,
+            raw_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+        """,
+        rows,
+    )
 
 
 def sync_airports_v2(cur, airport_data: dict[str, dict]):
@@ -1239,57 +1254,60 @@ def sync_airports_v2(cur, airport_data: dict[str, dict]):
             )
 
     # Step 2: upsert fresh airport metadata
-    for airport_code, rec in airport_data.items():
-        cur.execute(
-            """
-            INSERT INTO airports_v2 (
-                airport_code,
-                site_no,
-                airport_name,
-                city,
-                state,
-                country,
-                lat,
-                lon,
-                elevation,
-                airspace_class,
-                fuel_raw,
-                remarks,
-                raw_json
-            )
-            VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb
-            )
-            ON CONFLICT (airport_code) DO UPDATE SET
-                site_no = EXCLUDED.site_no,
-                airport_name = EXCLUDED.airport_name,
-                city = EXCLUDED.city,
-                state = EXCLUDED.state,
-                country = EXCLUDED.country,
-                lat = EXCLUDED.lat,
-                lon = EXCLUDED.lon,
-                elevation = EXCLUDED.elevation,
-                airspace_class = EXCLUDED.airspace_class,
-                fuel_raw = EXCLUDED.fuel_raw,
-                remarks = EXCLUDED.remarks,
-                raw_json = EXCLUDED.raw_json
-            """,
-            (
-                airport_code,
-                rec.get("site_no"),
-                rec.get("airport_name"),
-                rec.get("city"),
-                rec.get("state"),
-                rec.get("country") or "US",
-                rec.get("lat"),
-                rec.get("lon"),
-                rec.get("elevation"),
-                rec.get("airspace"),
-                rec.get("fuel"),
-                rec.get("remarks"),
-                json.dumps(rec, ensure_ascii=False),
-            ),
+    upsert_rows = [
+        (
+            airport_code,
+            rec.get("site_no"),
+            rec.get("airport_name"),
+            rec.get("city"),
+            rec.get("state"),
+            rec.get("country") or "US",
+            rec.get("lat"),
+            rec.get("lon"),
+            rec.get("elevation"),
+            rec.get("airspace"),
+            rec.get("fuel"),
+            rec.get("remarks"),
+            json.dumps(rec, ensure_ascii=False),
         )
+        for airport_code, rec in airport_data.items()
+    ]
+    cur.executemany(
+        """
+        INSERT INTO airports_v2 (
+            airport_code,
+            site_no,
+            airport_name,
+            city,
+            state,
+            country,
+            lat,
+            lon,
+            elevation,
+            airspace_class,
+            fuel_raw,
+            remarks,
+            raw_json
+        )
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb
+        )
+        ON CONFLICT (airport_code) DO UPDATE SET
+            site_no = EXCLUDED.site_no,
+            airport_name = EXCLUDED.airport_name,
+            city = EXCLUDED.city,
+            state = EXCLUDED.state,
+            country = EXCLUDED.country,
+            lat = EXCLUDED.lat,
+            lon = EXCLUDED.lon,
+            elevation = EXCLUDED.elevation,
+            airspace_class = EXCLUDED.airspace_class,
+            fuel_raw = EXCLUDED.fuel_raw,
+            remarks = EXCLUDED.remarks,
+            raw_json = EXCLUDED.raw_json
+        """,
+        upsert_rows,
+    )
 
     # Optional cleanup: remove airports no longer present in current import
     # This will cascade to runways/approaches only.
@@ -1317,23 +1335,13 @@ def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
     cur.execute("TRUNCATE TABLE airport_approaches_v2 RESTART IDENTITY CASCADE")
     cur.execute("TRUNCATE TABLE airport_runways_v2 RESTART IDENTITY CASCADE")
 
+    runway_rows = []
+    approach_rows = []
     for airport_code, rec in airport_data.items():
         for rwy in rec.get("runways", []):
             length_ft = int(rwy["length"]) if str(rwy.get("length", "")).strip().isdigit() else None
             width_ft = int(rwy["width"]) if str(rwy.get("width", "")).strip().isdigit() else None
-
-            cur.execute(
-                """
-                INSERT INTO airport_runways_v2 (
-                    airport_code,
-                    rwy_id,
-                    length_ft,
-                    width_ft,
-                    surface,
-                    condition
-                )
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
+            runway_rows.append(
                 (
                     airport_code,
                     rwy.get("rwy_id"),
@@ -1341,22 +1349,11 @@ def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
                     width_ft,
                     rwy.get("surface"),
                     rwy.get("condition"),
-                ),
+                )
             )
 
         for ap in rec.get("approaches", []):
-            cur.execute(
-                """
-                INSERT INTO airport_approaches_v2 (
-                    airport_code,
-                    approach_name,
-                    pdf_url,
-                    procuid,
-                    amdt_num,
-                    amdt_date
-                )
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
+            approach_rows.append(
                 (
                     airport_code,
                     ap.get("name"),
@@ -1364,8 +1361,37 @@ def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
                     ap.get("procuid"),
                     ap.get("amdt_num"),
                     ap.get("amdt_date"),
-                ),
+                )
             )
+
+    cur.executemany(
+        """
+        INSERT INTO airport_runways_v2 (
+            airport_code,
+            rwy_id,
+            length_ft,
+            width_ft,
+            surface,
+            condition
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        runway_rows,
+    )
+    cur.executemany(
+        """
+        INSERT INTO airport_approaches_v2 (
+            airport_code,
+            approach_name,
+            pdf_url,
+            procuid,
+            amdt_num,
+            amdt_date
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        approach_rows,
+    )
 
 
 def main(argv=None):
