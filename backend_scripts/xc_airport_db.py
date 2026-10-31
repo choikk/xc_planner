@@ -11,7 +11,7 @@ import json
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 from urllib.request import urlopen
 from collections import defaultdict
 
@@ -58,8 +58,13 @@ def get_current_nasr_effective_date():
 
 
 def get_cycle_from_effective_date(effective_date: str) -> str:
-    cycle_date = datetime.strptime(effective_date, "%Y-%m-%d")
-    return f"{cycle_date.strftime('%y')}{cycle_date.month:02d}"
+    # d-TPP cycles are YY + the 1-based index of the 28-day cycle within the year.
+    cycle_date = datetime.strptime(effective_date, "%Y-%m-%d").date()
+    anchor = date(2026, 1, 22)  # first cycle of 2026 (cycle 2601)
+    year_start = date(cycle_date.year, 1, 1)
+    first_cycle_offset = (anchor.toordinal() - year_start.toordinal()) % 28
+    index = (cycle_date.toordinal() - year_start.toordinal() - first_cycle_offset) // 28 + 1
+    return f"{cycle_date.strftime('%y')}{index:02d}"
 
 
 def ensure_metadata_table(cur):
