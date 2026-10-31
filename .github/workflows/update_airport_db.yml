@@ -9,6 +9,10 @@ concurrency:
   group: update-airport-database
   cancel-in-progress: false
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   update-airports:
     runs-on: ubuntu-latest
@@ -37,3 +41,15 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: python backend_scripts/xc_airport_db.py
+
+      # GitHub disables scheduled workflows after 60 days without repo activity.
+      # Re-enabling the workflow on each run resets that timer.
+      - name: Keep scheduled workflow enabled
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsS -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/update_airport_db.yml/enable"
