@@ -38,7 +38,7 @@ function buildAirportText({ label, code, airport }) {
 }
 
 function buildApproachPlateFetchUrl(pdfUrl) {
-  return `/.netlify/functions/airport-data?plateUrl=${encodeURIComponent(pdfUrl)}`;
+  return `${import.meta.env.VITE_API_BASE || '/.netlify/functions'}/airport-data?plateUrl=${encodeURIComponent(pdfUrl)}`;
 }
 
 async function fetchApproachPlateBuffer(pdfUrl) {
