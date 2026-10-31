@@ -35,7 +35,7 @@ const panelTabs = [
   { id: 'filters', label: 'Filters' },
   { id: 'results', label: 'Results' },
 ];
-const APP_VERSION = 'v2.0';
+const APP_VERSION = 'v2.1';
 
 export default function App() {
   const { airportData, databaseVersion, loading, error, locationIndex, loadAirportDetails } = useAirportData();
