@@ -7,6 +7,7 @@ import ResultsSection from './components/ResultsSection';
 import SummaryModal from './components/SummaryModal';
 import YourTripSection from './components/YourTripSection';
 import { useAirportData } from './hooks/useAirportData';
+import { formatNasrEffective } from './utils/nasr';
 import {
   findFirstLegDestinations,
   findFilteredInRangeFirstLegDestinations,
@@ -196,7 +197,7 @@ export default function App() {
         <span className="title-text">Cross Country Flight Planner</span>
       </h1>
       <div className="subtle-line">App version: {APP_VERSION}</div>
-      <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {databaseVersion}</div>
+      <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
     </div>
   );
 
@@ -222,7 +223,7 @@ export default function App() {
         </span>
       </h1>
       <div className="subtle-line">App version: {APP_VERSION}</div>
-      <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {databaseVersion}</div>
+      <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
     </div>
   );
 
@@ -408,7 +409,7 @@ export default function App() {
             <div className="credits-lines">
               <div>Cross Country Flight Planner</div>
               <div>App version: {APP_VERSION}</div>
-              <div>FAA 28-Day NASR Subscription: Effective {databaseVersion}</div>
+              <div>FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
               <div>Map data © OpenStreetMap contributors</div>
               <div>Built with React, Vite, Leaflet, and a lot of care.</div>
               <div>© 2026 pilot.drchoi@gmail.com. All rights reserved.</div>
