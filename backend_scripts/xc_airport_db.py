@@ -543,6 +543,12 @@ def parse_d_tpp_xml(xml_url: str, base_pdf_url: str, current_cycle: str):
                 continue
 
             pdf_name = record.findtext("pdf_name") or ""
+            # FAA keeps procedures decommissioned this cycle in the metafile,
+            # flagged useraction="D" and pointing at a placeholder PDF.
+            if (record.findtext("useraction") or "").strip().upper() == "D":
+                continue
+            if pdf_name.upper().startswith("DELETED"):
+                continue
             approaches.append(
                 {
                     "name": record.findtext("chart_name") or "",
