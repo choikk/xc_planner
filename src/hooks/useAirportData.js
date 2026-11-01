@@ -110,6 +110,7 @@ function normalizeBaseAirport(airport) {
     approachSummary: normalizeApproachSummary(airport),
     runways: [],
     approaches: [],
+    decommissioned: [],
     detailsLoaded: false,
   };
 }
@@ -153,6 +154,15 @@ function normalizeDetailedAirport(airport) {
     fbo_phone: fallbackPhone || resolvedFboContacts[0]?.phone || '',
     runways: runwaysRaw.map(normalizeRunway).filter((runway) => runway.rwy_id),
     approaches: approachesRaw.map(normalizeApproach).filter((approach) => approach.name),
+    decommissioned: Array.isArray(airport.decommissioned)
+      ? airport.decommissioned
+          .map((item) => ({
+            name: item?.name || '',
+            effective_date: item?.effective_date || '',
+            cycle: item?.cycle || '',
+          }))
+          .filter((item) => item.name)
+      : [],
     detailsLoaded: true,
   };
 }

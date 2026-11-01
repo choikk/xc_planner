@@ -527,6 +527,7 @@ def parse_d_tpp_xml(xml_url: str, base_pdf_url: str, current_cycle: str):
     cycle = root.get("cycle", current_cycle)
 
     approach_dict: dict[str, list[dict]] = {}
+    decommissioned_dict: dict[str, list[str]] = {}
 
     for airport in root.findall(".//airport_name"):
         apt_ident = airport.get("apt_ident")
@@ -536,6 +537,7 @@ def parse_d_tpp_xml(xml_url: str, base_pdf_url: str, current_cycle: str):
             continue
 
         approaches = []
+        decommissioned = set()
 
         for record in airport.findall("record"):
             chart_code = record.findtext("chart_code")
@@ -545,9 +547,13 @@ def parse_d_tpp_xml(xml_url: str, base_pdf_url: str, current_cycle: str):
             pdf_name = record.findtext("pdf_name") or ""
             # FAA keeps procedures decommissioned this cycle in the metafile,
             # flagged useraction="D" and pointing at a placeholder PDF.
-            if (record.findtext("useraction") or "").strip().upper() == "D":
-                continue
-            if pdf_name.upper().startswith("DELETED"):
+            if (
+                (record.findtext("useraction") or "").strip().upper() == "D"
+                or pdf_name.upper().startswith("DELETED")
+            ):
+                name = (record.findtext("chart_name") or "").strip()
+                if name:
+                    decommissioned.add(name)
                 continue
             approaches.append(
                 {
@@ -561,11 +567,13 @@ def parse_d_tpp_xml(xml_url: str, base_pdf_url: str, current_cycle: str):
 
         if approaches:
             approach_dict[key] = approaches
+        if decommissioned:
+            decommissioned_dict[key] = sorted(decommissioned)
 
-    return approach_dict, cycle
+    return approach_dict, decommissioned_dict, cycle
 
 
-def build_airport_data(df_base, rwy_dict, airspace_info, approach_dict):
+def build_airport_data(df_base, rwy_dict, airspace_info, approach_dict, decommissioned_dict=None):
     airport_data: dict[str, dict] = {}
 
     for _, row in df_base.iterrows():
@@ -603,6 +611,7 @@ def build_airport_data(df_base, rwy_dict, airspace_info, approach_dict):
             "fuel": fuel_types,
             "remarks": airspace["remarks"],
             "approaches": approaches,
+            "decommissioned": (decommissioned_dict or {}).get(code, []),
         }
 
     return airport_data
@@ -904,6 +913,21 @@ def ensure_v2_tables_exist(cur):
                 ON DELETE CASCADE
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS airport_decommissioned_approaches_v2 (
+            id bigserial PRIMARY KEY,
+            airport_code text NOT NULL,
+            approach_name text NOT NULL,
+            effective_date text NOT NULL,
+            faa_cycle text NOT NULL,
+            CONSTRAINT airport_decommissioned_approaches_v2_airport_code_fkey
+                FOREIGN KEY (airport_code)
+                REFERENCES airports_v2(airport_code)
+                ON UPDATE CASCADE
+                ON DELETE CASCADE
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_airport_decommissioned_approaches_v2_airport ON airport_decommissioned_approaches_v2 (airport_code)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_airport_approaches_v2_airport ON airport_approaches_v2 (airport_code)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_airport_approaches_v2_procuid ON airport_approaches_v2 (procuid)")
     cur.execute("""
@@ -1342,12 +1366,14 @@ def sync_airports_v2(cur, airport_data: dict[str, dict]):
         cur.execute("DELETE FROM airports_v2 WHERE airport_code = %s", (airport_code,))
 
 
-def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
+def refresh_runways_and_approaches(cur, airport_data: dict[str, dict], effective_date: str, cycle: str):
     cur.execute("TRUNCATE TABLE airport_approaches_v2 RESTART IDENTITY CASCADE")
+    cur.execute("TRUNCATE TABLE airport_decommissioned_approaches_v2 RESTART IDENTITY")
     cur.execute("TRUNCATE TABLE airport_runways_v2 RESTART IDENTITY CASCADE")
 
     runway_rows = []
     approach_rows = []
+    decommissioned_rows = []
     for airport_code, rec in airport_data.items():
         for rwy in rec.get("runways", []):
             length_ft = int(rwy["length"]) if str(rwy.get("length", "")).strip().isdigit() else None
@@ -1362,6 +1388,9 @@ def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
                     rwy.get("condition"),
                 )
             )
+
+        for name in rec.get("decommissioned", []):
+            decommissioned_rows.append((airport_code, name, effective_date, cycle))
 
         for ap in rec.get("approaches", []):
             approach_rows.append(
@@ -1402,6 +1431,18 @@ def refresh_runways_and_approaches(cur, airport_data: dict[str, dict]):
         VALUES (%s, %s, %s, %s, %s, %s)
         """,
         approach_rows,
+    )
+    cur.executemany(
+        """
+        INSERT INTO airport_decommissioned_approaches_v2 (
+            airport_code,
+            approach_name,
+            effective_date,
+            faa_cycle
+        )
+        VALUES (%s, %s, %s, %s)
+        """,
+        decommissioned_rows,
     )
 
 
@@ -1486,7 +1527,7 @@ def main(argv=None):
         df_base = load_airport_base(csv_path)
         rwy_dict = load_runways(csv_path)
         airspace_info = load_airspace(csv_path)
-        approach_dict, xml_cycle = parse_d_tpp_xml(
+        approach_dict, decommissioned_dict, xml_cycle = parse_d_tpp_xml(
             dtpp_xml_url,
             dtpp_base_pdf_url,
             cycle,
@@ -1498,7 +1539,7 @@ def main(argv=None):
         airway_segments = load_airway_segments(csv_path, airway_coordinate_lookup)
         airway_altitudes = load_airway_segment_altitudes(csv_path)
 
-        airport_data = build_airport_data(df_base, rwy_dict, airspace_info, approach_dict)
+        airport_data = build_airport_data(df_base, rwy_dict, airspace_info, approach_dict, decommissioned_dict)
 
         airport_count = len(airport_data)
         runway_count = sum(len(v.get("runways", [])) for v in airport_data.values())
@@ -1541,7 +1582,7 @@ def main(argv=None):
         with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 sync_airports_v2(cur, airport_data)
-                refresh_runways_and_approaches(cur, airport_data)
+                refresh_runways_and_approaches(cur, airport_data, effective_date, cycle)
                 refresh_fixes_v2(cur, fixes)
                 refresh_navaids_v2(cur, navaids)
                 refresh_airway_routes_v2(cur, airway_routes)

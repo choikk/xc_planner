@@ -66,6 +66,7 @@ function normalizeDetailedAirport(row) {
     fbo_phone: row.fbo_phone || normalizedContacts[0]?.phone || '',
     runways: Array.isArray(row.runways) ? row.runways : safeObject(row.runways),
     approaches: Array.isArray(row.approaches) ? row.approaches : safeObject(row.approaches),
+    decommissioned: Array.isArray(row.decommissioned) ? row.decommissioned : [],
   };
 }
 
@@ -225,7 +226,19 @@ export async function handler(event) {
               )
               from airport_approaches_v2 ap
               where ap.airport_code = a.airport_code
-            ), '[]'::json) as approaches
+            ), '[]'::json) as approaches,
+            coalesce((
+              select json_agg(
+                json_build_object(
+                  'name', dc.approach_name,
+                  'effective_date', dc.effective_date,
+                  'cycle', dc.faa_cycle
+                )
+                order by dc.approach_name
+              )
+              from airport_decommissioned_approaches_v2 dc
+              where dc.airport_code = a.airport_code
+            ), '[]'::json) as decommissioned
           from airports_v2 a
           left join price_contacts pc on pc.airport_code = a.airport_code
           where a.airport_code = any($1::text[])

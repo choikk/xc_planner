@@ -1111,3 +1111,9 @@ details { margin-bottom: .65rem; }
     break-inside: avoid;
   }
 }
+
+.popup-note {
+  margin-top: 6px;
+  font-size: 0.85em;
+  color: #64748b;
+}

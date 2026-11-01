@@ -15,6 +15,7 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import { computeEllipsePoints, formatSurface, getAirspaceColor, haversine } from '../utils/geo';
+import { formatDecommissionedNote } from '../utils/decommissioned';
 
 const homeIcon = new L.Icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -108,6 +109,7 @@ function MapBackgroundReset({ enabled, onBackgroundClick, suppressResetRef }) {
 
 function renderAirportPopupContent(airport, extraLines = []) {
   const approaches = Array.isArray(airport.approaches) ? airport.approaches : [];
+  const decommissionedNote = formatDecommissionedNote(airport);
   const runways = Array.isArray(airport.runways) ? airport.runways : [];
   const fboContacts = Array.isArray(airport.fbo_contacts)
     ? airport.fbo_contacts.filter((contact) => contact?.name || contact?.phone)
@@ -164,6 +166,7 @@ function renderAirportPopupContent(airport, extraLines = []) {
           ) : (
             <div>None</div>
           )}
+          {decommissionedNote ? <div className="popup-note">{decommissionedNote}</div> : null}
         </>
       ) : (
         <div className="popup-section-title">Loading airport details...</div>
