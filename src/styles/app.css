@@ -74,6 +74,13 @@ select optgroup {
   line-height: 1;
 }
 
+.title-emblem {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+}
+
 .title-text {
   display: block;
   min-width: 0;
@@ -946,6 +953,12 @@ details { margin-bottom: .65rem; }
   .mobile-map-title .title-mark {
     font-size: .92rem;
     margin-top: .08rem;
+  }
+
+  .mobile-map-title .title-emblem {
+    width: 1.7rem;
+    height: 1.7rem;
+    margin-top: 0;
   }
 
   .mobile-map-title .subtle-line {

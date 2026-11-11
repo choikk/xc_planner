@@ -195,7 +195,7 @@ export default function App() {
           }
         }}
       >
-        <span className="title-mark">🛫</span>
+        <img className="title-mark title-emblem" src={`${import.meta.env.BASE_URL}solo-emblem-64.png`} alt="Solo Aviators" width="32" height="32" />
         <span className="title-text">Cross Country Flight Planner</span>
       </h1>
       <a className="subtle-line home-link" href="https://www.soloaviators.com/">← Solo Aviators</a>
@@ -220,7 +220,7 @@ export default function App() {
           }
         }}
       >
-        <span className="title-mark">🛫</span>
+        <img className="title-mark title-emblem" src={`${import.meta.env.BASE_URL}solo-emblem-64.png`} alt="Solo Aviators" width="32" height="32" />
         <span className="title-text mobile-title-text">
           <span>Cross Country</span>
           <span>Flight Planner</span>
