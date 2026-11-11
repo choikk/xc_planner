@@ -148,18 +148,18 @@ function renderAirportPopupContent(airport, extraLines = []) {
             <div>None</div>
           )}
 
+          <div className="popup-section-title">Airport Diagram:</div>
           {airport.diagram?.pdf_url ? (
-            <>
-              <div className="popup-section-title">Airport Diagram:</div>
-              <ul className="popup-list">
-                <li>
-                  <a href={airport.diagram.pdf_url} target="_blank" rel="noreferrer">
-                    Airport Diagram
-                  </a>
-                </li>
-              </ul>
-            </>
-          ) : null}
+            <ul className="popup-list">
+              <li>
+                <a href={airport.diagram.pdf_url} target="_blank" rel="noreferrer">
+                  Airport Diagram
+                </a>
+              </li>
+            </ul>
+          ) : (
+            <div>None</div>
+          )}
 
           <div className="popup-section-title">Instrument Approaches:</div>
           {approaches.length > 0 ? (

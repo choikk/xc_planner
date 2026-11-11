@@ -23,9 +23,11 @@ function buildAirportText({ label, code, airport }) {
         approach.pdf_url ? `- ${approach.name}: ${approach.pdf_url}` : `- ${approach.name}`
       ))
     : ['- None'];
-  const diagramLines = airport.diagram?.pdf_url
-    ? ['Airport Diagram:', `- ${airport.diagram.pdf_url}`, '']
-    : [];
+  const diagramLines = [
+    'Airport Diagram:',
+    airport.diagram?.pdf_url ? `- ${airport.diagram.pdf_url}` : '- None',
+    '',
+  ];
   const decommissionedNote = formatDecommissionedNote(airport);
 
   return [
@@ -1015,9 +1017,9 @@ function SummaryDraftPreview({
                 )) : <div>None</div>}
               </div>
 
-              {section.airport.diagram?.pdf_url ? (
-                <div className="summary-approaches">
-                  <strong>Airport Diagram</strong>
+              <div className="summary-approaches">
+                <strong>Airport Diagram</strong>
+                {section.airport.diagram?.pdf_url ? (
                   <ul className="summary-approach-checklist">
                     <li className="summary-approach-item">
                       <label className="summary-approach-check">
@@ -1037,8 +1039,10 @@ function SummaryDraftPreview({
                       </label>
                     </li>
                   </ul>
-                </div>
-              ) : null}
+                ) : (
+                  <div>None</div>
+                )}
+              </div>
 
               <div className="summary-approaches">
                 <strong>Instrument Approaches</strong>
