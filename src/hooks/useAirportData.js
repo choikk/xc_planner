@@ -110,6 +110,7 @@ function normalizeBaseAirport(airport) {
     approachSummary: normalizeApproachSummary(airport),
     runways: [],
     approaches: [],
+    diagram: null,
     decommissioned: [],
     detailsLoaded: false,
   };
@@ -154,6 +155,9 @@ function normalizeDetailedAirport(airport) {
     fbo_phone: fallbackPhone || resolvedFboContacts[0]?.phone || '',
     runways: runwaysRaw.map(normalizeRunway).filter((runway) => runway.rwy_id),
     approaches: approachesRaw.map(normalizeApproach).filter((approach) => approach.name),
+    diagram: airport.diagram && airport.diagram.pdf_url
+      ? { name: airport.diagram.name || 'AIRPORT DIAGRAM', pdf_url: airport.diagram.pdf_url }
+      : null,
     decommissioned: Array.isArray(airport.decommissioned)
       ? airport.decommissioned
           .map((item) => ({

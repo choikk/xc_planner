@@ -65,6 +65,7 @@ function normalizeDetailedAirport(row) {
     fbo_phone: row.fbo_phone || normalizedContacts[0]?.phone || '',
     runways: Array.isArray(row.runways) ? row.runways : safeObject(row.runways),
     approaches: Array.isArray(row.approaches) ? row.approaches : safeObject(row.approaches),
+    diagram: row.diagram && row.diagram.pdf_url ? { name: row.diagram.name || 'AIRPORT DIAGRAM', pdf_url: row.diagram.pdf_url } : null,
     decommissioned: Array.isArray(row.decommissioned) ? row.decommissioned : [],
   };
 }
@@ -170,21 +171,34 @@ export async function handler(event) {
       const detailsResult = await client.query(
         `
           with price_contacts as (
+            -- FBOs for the popup. Closed price periods keep old names and missing phones, which showed
+            -- up as duplicates, so use the current periods when the airport has any (otherwise fall back
+            -- to the history) and drop a phone-less entry when the same FBO name also has a phone.
+            with fbo_rows as (
+              select
+                p.airport_code,
+                p.fbo_name,
+                coalesce(p.fbo_phone, '') as phone,
+                (p.valid_to is null) as is_open,
+                bool_or(p.valid_to is null) over (partition by p.airport_code) as airport_has_open,
+                bool_or(coalesce(p.fbo_phone, '') <> '') over (partition by p.airport_code, p.fbo_name) as name_has_phone
+              from price_periods p
+              where coalesce(nullif(p.fbo_name, ''), '') <> ''
+                and p.airport_code = any($1::text[])
+            )
             select
-              p.airport_code,
+              f.airport_code,
               json_agg(
-                json_build_object(
-                  'name', p.fbo_name,
-                  'phone', coalesce(p.fbo_phone, '')
-                )
-                order by p.fbo_name, coalesce(p.fbo_phone, '')
+                json_build_object('name', f.fbo_name, 'phone', f.phone)
+                order by f.fbo_name, f.phone
               ) as fbo_contacts
             from (
-              select distinct airport_code, fbo_name, fbo_phone
-              from price_periods
-              where coalesce(nullif(fbo_name, ''), '') <> ''
-            ) p
-            group by p.airport_code
+              select distinct airport_code, fbo_name, phone
+              from fbo_rows
+              where (is_open or not airport_has_open)
+                and (phone <> '' or not name_has_phone)
+            ) f
+            group by f.airport_code
           )
           select
             a.airport_code,
@@ -226,6 +240,11 @@ export async function handler(event) {
               from airport_approaches_v2 ap
               where ap.airport_code = a.airport_code
             ), '[]'::json) as approaches,
+            (
+              select json_build_object('name', d.diagram_name, 'pdf_url', d.pdf_url)
+              from airport_diagrams_v2 d
+              where d.airport_code = a.airport_code
+            ) as diagram,
             coalesce((
               select json_agg(
                 json_build_object(
