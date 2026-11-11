@@ -136,11 +136,14 @@ export default function App() {
     setSelectedSecondLegCode('');
   }, [selectedFirstLegCode]);
 
+  // A saved home airport is selected on the first render, before the airport list has loaded.
+  // Re-run once the list contains it, otherwise its runways would stay on "Loading airport details...".
+  const homeAirportKnown = Boolean(airportData[selectedAirportCode]);
   useEffect(() => {
-    if (selectedAirportCode) {
+    if (selectedAirportCode && homeAirportKnown) {
       loadAirportDetails(selectedAirportCode);
     }
-  }, [selectedAirportCode, loadAirportDetails]);
+  }, [selectedAirportCode, homeAirportKnown, loadAirportDetails]);
 
   useEffect(() => {
     const codes = [selectedFirstLegCode];
