@@ -632,6 +632,10 @@ def build_airport_data(df_base, rwy_dict, airspace_info, approach_dict, decommis
             "approaches": approaches,
             "decommissioned": (decommissioned_dict or {}).get(code, []),
             "diagram": (diagram_dict or {}).get(code),
+            # FACILITY_USE_CODE: PU = open to the public, PR = private use.
+            # OWNERSHIP_TYPE_CODE: PU/PR plus MA (Air Force), MN (Navy), MR (Army), CG (Coast Guard).
+            "facility_use": str(row.get("FACILITY_USE_CODE", "")).strip().upper(),
+            "ownership": str(row.get("OWNERSHIP_TYPE_CODE", "")).strip().upper(),
         }
 
     return airport_data
@@ -891,6 +895,8 @@ def ensure_v2_tables_exist(cur):
             raw_json jsonb
         )
     """)
+    cur.execute("ALTER TABLE airports_v2 ADD COLUMN IF NOT EXISTS facility_use text")
+    cur.execute("ALTER TABLE airports_v2 ADD COLUMN IF NOT EXISTS ownership text")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_airports_v2_state ON airports_v2 (state)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_airports_v2_site_no ON airports_v2 (site_no)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_airports_v2_airspace ON airports_v2 (airspace_class)")
@@ -1339,6 +1345,8 @@ def sync_airports_v2(cur, airport_data: dict[str, dict]):
             rec.get("fuel"),
             rec.get("remarks"),
             json.dumps(rec, ensure_ascii=False),
+            rec.get("facility_use") or None,
+            rec.get("ownership") or None,
         )
         for airport_code, rec in airport_data.items()
     ]
@@ -1357,10 +1365,12 @@ def sync_airports_v2(cur, airport_data: dict[str, dict]):
             airspace_class,
             fuel_raw,
             remarks,
-            raw_json
+            raw_json,
+            facility_use,
+            ownership
         )
         VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s
         )
         ON CONFLICT (airport_code) DO UPDATE SET
             site_no = EXCLUDED.site_no,
@@ -1374,7 +1384,9 @@ def sync_airports_v2(cur, airport_data: dict[str, dict]):
             airspace_class = EXCLUDED.airspace_class,
             fuel_raw = EXCLUDED.fuel_raw,
             remarks = EXCLUDED.remarks,
-            raw_json = EXCLUDED.raw_json
+            raw_json = EXCLUDED.raw_json,
+            facility_use = EXCLUDED.facility_use,
+            ownership = EXCLUDED.ownership
         """,
         upsert_rows,
     )

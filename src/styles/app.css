@@ -555,6 +555,21 @@ details { margin-bottom: .65rem; }
   border: 1px solid #64748b;
 }
 
+.airspace-legend-swatch.access-public,
+.airspace-legend-swatch.access-nonpublic {
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.airspace-legend-swatch.access-public {
+  background: #64748b;
+}
+
+.airspace-legend-swatch.access-nonpublic {
+  background: #ffffff;
+  border: 3px solid #64748b;
+}
+
 .airspace-legend-swatch.outer-sample {
   background: linear-gradient(135deg, rgba(51, 153, 255, .25), rgba(255, 51, 51, .25));
 }

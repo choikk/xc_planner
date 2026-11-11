@@ -71,6 +71,7 @@ function getApproachSummary(airport) {
 }
 
 function airportMatchesFilters(airport, filters) {
+  if (filters.excludeNonPublic && airport.access && airport.access !== 'pub') return false;
   if (!filters.airspaces.includes(airport.airspace)) return false;
   if (airport.elevation > filters.maxAirportElev) return false;
   if (filters.mustHaveFuel && airport.fuel === 'None') return false;

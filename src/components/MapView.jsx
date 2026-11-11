@@ -35,11 +35,35 @@ const airspaceLegendItems = [
   ['G', 'Class G'],
 ];
 
-function squareDivIcon(color, isSelected = false) {
+// Private and military airports are drawn hollow (white inside, coloured outline); public ones are filled.
+function isNonPublic(airport) {
+  return Boolean(airport?.access) && airport.access !== 'pub';
+}
+
+function withAccessStyle(airport, options) {
+  if (!isNonPublic(airport)) return options;
+  return {
+    ...options,
+    fillColor: '#ffffff',
+    fillOpacity: 0.92,
+    weight: (options.weight || 1.5) + 1,
+  };
+}
+
+function accessLabel(airport) {
+  if (airport?.access === 'mil') return 'Military airport (private use)';
+  if (airport?.access === 'pvt') return 'Private airport';
+  return 'Public airport';
+}
+
+function squareDivIcon(color, isSelected = false, hollow = false) {
   const size = isSelected ? 18 : 16;
+  const paint = hollow
+    ? `background:#ffffff;border:3px solid ${color};box-sizing:border-box;`
+    : `background:${color};`;
   return L.divIcon({
     className: 'square-marker-wrapper',
-    html: `<div class="square-marker ${isSelected ? 'selected' : ''}" style="background:${color};width:${size}px;height:${size}px"></div>`,
+    html: `<div class="square-marker ${isSelected ? 'selected' : ''}" style="${paint}width:${size}px;height:${size}px"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -122,6 +146,7 @@ function renderAirportPopupContent(airport, extraLines = []) {
         <strong>{airport.airport_code}</strong> (Elevation {airport.elevation}ft, Class {airport.airspace})
       </div>
       <div>{airport.airport_name}</div>
+      <div>{accessLabel(airport)}</div>
       <div>Fuel: {airport.fuel}</div>
       {fboContacts.map((contact, index) => (
         <div key={`${airport.airport_code}-fbo-${index}`}>
@@ -399,6 +424,14 @@ export default function MapView({
                 <span>{label}</span>
               </div>
             ))}
+            <div className="airspace-legend-row">
+              <span className="airspace-legend-swatch access-public" />
+              <span>Public airport</span>
+            </div>
+            <div className="airspace-legend-row">
+              <span className="airspace-legend-swatch access-nonpublic" />
+              <span>Private / military airport</span>
+            </div>
             <div className="airspace-legend-row muted">
               <span className="airspace-legend-swatch outer-sample" />
               <span>Filtered out / Max + 100 NM</span>
@@ -468,13 +501,13 @@ export default function MapView({
               click: markMapInteraction,
               popupopen: () => onRequestAirportDetails?.(result.code),
             }}
-            pathOptions={{
+            pathOptions={withAccessStyle(airport, {
               color,
               fillColor: color,
               fillOpacity: 0.16,
               opacity: 0.34,
               weight: 1.25,
-            }}
+            })}
           >
             {showHoverTooltips && (
               <Tooltip direction="top" offset={[0, -8]}>
@@ -507,13 +540,13 @@ export default function MapView({
               click: markMapInteraction,
               popupopen: () => onRequestAirportDetails?.(result.code),
             }}
-            pathOptions={{
+            pathOptions={withAccessStyle(airport, {
               color,
               fillColor: color,
               fillOpacity: 0.22,
               opacity: 0.45,
               weight: 1.5,
-            }}
+            })}
           >
             {showHoverTooltips && (
               <Tooltip direction="top" offset={[0, -8]}>
@@ -609,12 +642,12 @@ export default function MapView({
               click: handleFirstLegSelect,
               touchstart: handleFirstLegSelect,
             }}
-            pathOptions={{
+            pathOptions={withAccessStyle(airport, {
               color,
               fillColor: color,
               fillOpacity: selected ? 0.98 : 0.88,
               weight: selected ? 3 : 2,
-            }}
+            })}
           >
             {showHoverTooltips && (
               <Tooltip direction="top" offset={[0, -8]}>
@@ -641,7 +674,7 @@ export default function MapView({
           <Marker
             key={`second-${result.code}`}
             position={[airport.lat, airport.lon]}
-            icon={squareDivIcon(getAirspaceColor(airport.airspace), selected)}
+            icon={squareDivIcon(getAirspaceColor(airport.airspace), selected, isNonPublic(airport))}
             eventHandlers={{
               click: handleSecondLegSelect,
               touchstart: handleSecondLegSelect,

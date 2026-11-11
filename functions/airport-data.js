@@ -70,6 +70,14 @@ function normalizeDetailedAirport(row) {
   };
 }
 
+// pub = open to the public (FAA FACILITY_USE_CODE PU), mil = military-owned private use, pvt = other private use.
+// Unknown values count as public so nothing disappears before the data is loaded.
+function accessCode(row) {
+  const use = String(row.facility_use || '').toUpperCase();
+  if (!use || use === 'PU') return 'pub';
+  return ['MA', 'MN', 'MR', 'CG'].includes(String(row.ownership || '').toUpperCase()) ? 'mil' : 'pvt';
+}
+
 function compactBaseAirport(row) {
   return {
     c: String(row.airport_code || '').trim().toUpperCase(),
@@ -81,6 +89,7 @@ function compactBaseAirport(row) {
     lo: Number(row.lon),
     e: Number(row.elevation || 0),
     a: row.airspace_class || 'G',
+    u: accessCode(row),
     f: row.fuel_raw || 'None',
     rm: [
       Number(row.max_asph || 0),
@@ -309,6 +318,8 @@ export async function handler(event) {
         a.elevation,
         coalesce(a.airspace_class, 'G') as airspace_class,
         coalesce(nullif(a.fuel_raw, ''), 'None') as fuel_raw,
+        a.facility_use,
+        a.ownership,
         coalesce(rs.max_asph, 0) as max_asph,
         coalesce(rs.max_conc, 0) as max_conc,
         coalesce(rs.max_turf, 0) as max_turf,

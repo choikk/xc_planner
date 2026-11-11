@@ -23,6 +23,7 @@ const defaultFilters = {
   minRunwayLength: 3000,
   maxAirportElev: 6000,
   mustHaveFuel: true,
+  excludeNonPublic: true,
   firstLegMin: 50,
   firstLegMax: 100,
   totalLegMin: 150,

@@ -38,6 +38,14 @@ export default function FiltersSection({ filters, setFilters }) {
         />
         <span>Fuel service required</span>
       </label>
+      <label className="toggle-line filter-toggle-top">
+        <input
+          type="checkbox"
+          checked={filters.excludeNonPublic}
+          onChange={(e) => setField('excludeNonPublic', e.target.checked)}
+        />
+        <span>Exclude non-public airports</span>
+      </label>
 
       <details open>
         <summary>Surface Type</summary>

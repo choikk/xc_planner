@@ -102,6 +102,7 @@ function normalizeBaseAirport(airport) {
     lon: Number(airport.lon ?? airport.lo),
     elevation: Number(airport.elevation ?? airport.e ?? 0),
     airspace: airport.airspace || airport.airspace_class || airport.a || 'G',
+    access: ['pub', 'pvt', 'mil'].includes(airport.u) ? airport.u : 'pub',
     fuel: airport.fuel || airport.fuel_raw || airport.f || 'None',
     fbo_contacts: resolvedFboContacts,
     fbo_name: fallbackName || resolvedFboContacts[0]?.name || '',
