@@ -92,6 +92,19 @@ select optgroup {
   font-size: .9rem;
 }
 
+.home-link {
+  display: block;
+  width: fit-content;
+  text-decoration: none;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.home-link:hover,
+.home-link:focus-visible {
+  text-decoration: underline;
+}
+
 .panel-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

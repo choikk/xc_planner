@@ -196,6 +196,7 @@ export default function App() {
         <span className="title-mark">🛫</span>
         <span className="title-text">Cross Country Flight Planner</span>
       </h1>
+      <a className="subtle-line home-link" href="https://www.soloaviators.com/">← Solo Aviators</a>
       <div className="subtle-line">App version: {APP_VERSION}</div>
       <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
     </div>
@@ -222,6 +223,7 @@ export default function App() {
           <span>Flight Planner</span>
         </span>
       </h1>
+      <a className="subtle-line home-link" href="https://www.soloaviators.com/">← Solo Aviators</a>
       <div className="subtle-line">App version: {APP_VERSION}</div>
       <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
     </div>
