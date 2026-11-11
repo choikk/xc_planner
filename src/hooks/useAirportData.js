@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildLocationIndex } from '../utils/filtering';
 
-const ENDPOINT = `${import.meta.env.VITE_API_BASE || '/.netlify/functions'}/airport-data`;
+const ENDPOINT = `${import.meta.env.VITE_API_BASE || '/api'}/airport-data`;
 
 function isFiniteCoord(lat, lon) {
   return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;

@@ -7,6 +7,7 @@ import ResultsSection from './components/ResultsSection';
 import SummaryModal from './components/SummaryModal';
 import YourTripSection from './components/YourTripSection';
 import { useAirportData } from './hooks/useAirportData';
+import { useVisitors } from './hooks/useVisitors';
 import { formatNasrEffective } from './utils/nasr';
 import {
   findFirstLegDestinations,
@@ -36,10 +37,11 @@ const panelTabs = [
   { id: 'filters', label: 'Filters' },
   { id: 'results', label: 'Results' },
 ];
-const APP_VERSION = 'v2611.10';
+const APP_VERSION = 'v2611.11';
 
 export default function App() {
   const { airportData, databaseVersion, loading, error, locationIndex, loadAirportDetails } = useAirportData();
+  const visitors = useVisitors();
   const [filters, setFilters] = useState(defaultFilters);
   const [selectedCountry, setSelectedCountry] = useState('US');
   const [selectedState, setSelectedState] = useState('');
@@ -198,6 +200,7 @@ export default function App() {
       </h1>
       <a className="subtle-line home-link" href="https://www.soloaviators.com/">← Solo Aviators</a>
       <div className="subtle-line">App version: {APP_VERSION}</div>
+      {visitors != null && <div className="subtle-line">Visitors (last 24h): {visitors.toLocaleString('en-US')}</div>}
       <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
     </div>
   );
@@ -225,6 +228,7 @@ export default function App() {
       </h1>
       <a className="subtle-line home-link" href="https://www.soloaviators.com/">← Solo Aviators</a>
       <div className="subtle-line">App version: {APP_VERSION}</div>
+      {visitors != null && <div className="subtle-line">Visitors (last 24h): {visitors.toLocaleString('en-US')}</div>}
       <div className="subtle-line">FAA 28-Day NASR Subscription: Effective {formatNasrEffective(databaseVersion)}</div>
     </div>
   );

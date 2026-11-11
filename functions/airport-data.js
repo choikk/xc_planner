@@ -5,7 +5,6 @@ const { Client } = pg;
 function buildClient() {
   const connectionString =
     process.env.NEON_DATABASE_URL ||
-    process.env.NETLIFY_DATABASE_URL ||
     process.env.DATABASE_URL;
 
   if (!connectionString) {

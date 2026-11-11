@@ -5,7 +5,7 @@ XC Planner v2 is a React/Vite cross-country flight planning app for U.S. general
 ## What's New
 
 - Rebuilt the planner as a React/Vite app with a cleaner, faster v2 codebase
-- Replaced the old bundled JSON-data workflow with a database-backed airport pipeline and Netlify function endpoint
+- Replaced the old bundled JSON-data workflow with a database-backed airport pipeline and an `/api/airport-data` endpoint
 - Reworked the trip workflow so map candidates update immediately when filters or trip options change
 - Added a more guided home-base-first planning flow for round trips and triangle trips
 - Added persistent home base selection in the same browser
@@ -22,25 +22,24 @@ XC Planner v2 is a React/Vite cross-country flight planning app for U.S. general
 - Airspace-colored selectable destinations
 - Faint map markers for filtered-out airports and airports just outside the first-leg max range
 - Summary report modal with PDF and text views
-- Netlify function backed by the `airports_v2` database tables
+- `/api/airport-data` endpoint backed by the `airports_v2` database tables
 
 ## Stack
 
 - React 18
 - Vite 5
 - Leaflet / React Leaflet
-- Netlify Functions
+- Node.js API handler (`functions/`) served by a small HTTP adapter
 - PostgreSQL via `pg`
 
 ## Repository Layout
 
 - [index.html](/Users/kchoi/Workspace/xc_planner/index.html): Vite entry document
 - [src/](/Users/kchoi/Workspace/xc_planner/src): v2 application source
-- [netlify/functions/airport-data.js](/Users/kchoi/Workspace/xc_planner/netlify/functions/airport-data.js): serverless airport-data endpoint
+- [functions/airport-data.js](/Users/kchoi/Workspace/xc_planner/functions/airport-data.js): airport-data API handler
 - [backend_scripts/xc_airport_db.py](/Users/kchoi/Workspace/xc_planner/backend_scripts/xc_airport_db.py): FAA-to-database update script
 - [backend_scripts/requirements.txt](/Users/kchoi/Workspace/xc_planner/backend_scripts/requirements.txt): Python dependencies for the update script
 - [backend_scripts/neon/](/Users/kchoi/Workspace/xc_planner/backend_scripts/neon): Neon/Postgres support files and SQL helpers
-- [netlify.toml](/Users/kchoi/Workspace/xc_planner/netlify.toml): Netlify build and functions config
 - [.github/workflows/update_airport_db.yml](/Users/kchoi/Workspace/xc_planner/.github/workflows/update_airport_db.yml): weekly airport database update workflow on `main`
 
 ## Local Development
@@ -71,10 +70,9 @@ npm run preview
 
 ## Environment
 
-The deployed app and the Netlify function expect one of these environment variables to be set:
+The deployed app and the API handler expect one of these environment variables to be set:
 
 - `NEON_DATABASE_URL`
-- `NETLIFY_DATABASE_URL`
 - `DATABASE_URL`
 
 Local secret shell files such as `backend_scripts/neon/neon_env.bash` are intentionally ignored by git. Use [backend_scripts/neon/neon_env.bash.example](/Users/kchoi/Workspace/xc_planner/backend_scripts/neon/neon_env.bash.example) as the template instead of committing real credentials.
@@ -82,7 +80,7 @@ Local secret shell files such as `backend_scripts/neon/neon_env.bash` are intent
 ## Data Flow
 
 1. [backend_scripts/xc_airport_db.py](/Users/kchoi/Workspace/xc_planner/backend_scripts/xc_airport_db.py) downloads and normalizes FAA source data, then updates the database.
-2. [netlify/functions/airport-data.js](/Users/kchoi/Workspace/xc_planner/netlify/functions/airport-data.js) reads from the database and returns airport payloads for the frontend.
+2. [functions/airport-data.js](/Users/kchoi/Workspace/xc_planner/functions/airport-data.js) reads from the database and returns airport payloads for the frontend.
 3. The React app in [src/](/Users/kchoi/Workspace/xc_planner/src) renders the map, filters, candidate airports, and summary output.
 
 ## License
