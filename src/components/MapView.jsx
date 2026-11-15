@@ -562,7 +562,7 @@ export default function MapView({
                 </div>
                 <div className="airspace-legend-row muted">
                   <span className="airspace-legend-swatch" style={{ background: 'transparent', border: 'none' }} />
-                  <span>VFR cruising altitude (14 CFR 91.159), above 3,000 ft AGL</span>
+                  <span>Cruising altitude: IFR 14 CFR 91.179, VFR 14 CFR 91.159</span>
                 </div>
               </>
             )}
@@ -901,6 +901,48 @@ export default function MapView({
               />
             </>
           )}
+
+          {[
+            ...((oneWay.faint?.outer || []).map((result) => ({ ...result, kind: 'outer' }))),
+            ...((oneWay.faint?.filtered || []).map((result) => ({ ...result, kind: 'filtered' }))),
+          ].map((result) => {
+            const airport = airportData[result.code];
+            if (!airport || !isFiniteCoord(airport.lat, airport.lon)) return null;
+            const color = getAirspaceColor(airport.airspace);
+            const outer = result.kind === 'outer';
+
+            return (
+              <CircleMarker
+                key={`oneway-${result.kind}-${result.code}`}
+                center={[airport.lat, airport.lon]}
+                radius={5}
+                eventHandlers={{
+                  click: markMapInteraction,
+                  popupopen: () => onRequestAirportDetails?.(result.code),
+                }}
+                pathOptions={withAccessStyle(airport, {
+                  color,
+                  fillColor: color,
+                  fillOpacity: outer ? 0.16 : 0.22,
+                  opacity: outer ? 0.34 : 0.45,
+                  weight: outer ? 1.25 : 1.5,
+                })}
+              >
+                {showHoverTooltips && (
+                  <Tooltip direction="top" offset={[0, -8]}>
+                    {result.code}
+                  </Tooltip>
+                )}
+                <Popup minWidth={290} maxWidth={480}>
+                  {renderAirportPopupContent(airport, [
+                    `Distance: ${result.distance.toFixed(1)} NM`,
+                    outer ? 'Outside the maximum distance' : 'Excluded by current filters',
+                    'Not selectable',
+                  ])}
+                </Popup>
+              </CircleMarker>
+            );
+          })}
 
           {(oneWay.destCandidates || []).map((result) => {
             const airport = airportData[result.code];

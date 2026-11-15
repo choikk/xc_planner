@@ -16,6 +16,7 @@ import {
   findSecondLegDestinations,
   findOneWayStopCandidates,
   findDestinationCandidates,
+  findOneWayFaintAirports,
   describeOneWayStuck,
   oneWayFinishInfo,
   validateOneWayRoute,
@@ -130,6 +131,7 @@ export default function App() {
   }, [destPicking, airportData, selectedAirportCode, destRange, filters]);
 
   const oneWayActiveIndex = effectiveStops.length;
+  const oneWayFaintRange = destPicking ? destRange : (oneWayLegs[oneWayActiveIndex] || DEFAULT_ONE_WAY_LEG);
   const oneWayLeg = oneWayLegs[oneWayActiveIndex] || DEFAULT_ONE_WAY_LEG;
   // A next step is open until the route has been finished at B.
   const oneWaySlotOpen = Boolean(isOneWay && destAirport && selectedAirport && !oneWayDone);
@@ -148,6 +150,17 @@ export default function App() {
       excludeCodes: effectiveStops,
     });
   }, [oneWaySlotOpen, airportData, oneWayOriginCode, destCode, oneWayLeg, filters, effectiveStops]);
+  // Faint (not selectable) airports: excluded by the filters inside the range, or just beyond the maximum distance.
+  const oneWayFaint = useMemo(() => {
+    if (!((isOneWay && oneWaySlotOpen) || destPicking)) return { filtered: [], outer: [] };
+    return findOneWayFaintAirports(
+      airportData,
+      destPicking ? selectedAirportCode : oneWayOriginCode,
+      oneWayFaintRange,
+      filters,
+      [...effectiveStops, destCode]
+    );
+  }, [isOneWay, oneWaySlotOpen, destPicking, airportData, selectedAirportCode, oneWayOriginCode, oneWayFaintRange, filters, effectiveStops, destCode]);
   const oneWayProblem = useMemo(() => {
     if (!oneWaySlotOpen || oneWayFinish.canFinish || oneWayCandidates.length > 0) return '';
     return describeOneWayStuck(airportData, oneWayOriginCode, destCode, oneWayLeg);
@@ -591,6 +604,7 @@ export default function App() {
             finishInfo: oneWayFinish,
             finished: oneWayDone,
             onFinish: handleFinishOneWay,
+            faint: oneWayFaint,
           }}
         />
       </main>

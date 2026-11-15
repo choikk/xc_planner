@@ -393,3 +393,26 @@ export function findDestinationCandidates(airportData, homeCode, range, filters)
   results.sort((a, b) => (filters.sortBy === 'alphabetical' ? a.code.localeCompare(b.code) : a.distance - b.distance));
   return results;
 }
+
+// Faint markers on the one-way map (like the round-trip map): airports inside the range that the filters exclude, and
+// airports that pass the filters but lie just beyond the maximum distance. Neither can be chosen.
+export function findOneWayFaintAirports(airportData, originCode, range, filters, excludeCodes = [], outerBufferNm = 100) {
+  const origin = airportData[originCode];
+  if (!origin) return { filtered: [], outer: [] };
+  const excluded = new Set([originCode, ...excludeCodes]);
+
+  const filtered = [];
+  const outer = [];
+  Object.entries(airportData).forEach(([code, airport]) => {
+    if (excluded.has(code)) return;
+    const distance = haversine(origin.lat, origin.lon, airport.lat, airport.lon);
+    if (distance > range.max + outerBufferNm) return;
+    const passes = airportMatchesFilters(airport, filters);
+    if (distance >= range.min && distance <= range.max) {
+      if (!passes) filtered.push({ code, distance });
+    } else if (distance > range.max && passes) {
+      outer.push({ code, distance });
+    }
+  });
+  return { filtered, outer };
+}
