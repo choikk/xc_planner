@@ -1491,3 +1491,21 @@ details { margin-bottom: .65rem; }
 .result-card-note.muted {
   color: #94a3b8;
 }
+
+.oneway-flip {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  margin: .5rem 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.oneway-flip:hover {
+  background: #eff6ff;
+}

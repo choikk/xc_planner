@@ -94,6 +94,7 @@ function OneWayPlanner({ oneWay }) {
     destCandidateCount,
     onDestRangeChange,
     onClearDest,
+    onFlip,
     problem,
     finishInfo,
     finished,
@@ -144,6 +145,12 @@ function OneWayPlanner({ oneWay }) {
           <p className="empty-text">Select a home base in the Home tab.</p>
         )}
       </div>
+
+      {destAirport && (
+        <button type="button" className="oneway-flip" onClick={onFlip} title="Swap origin and destination">
+          <span aria-hidden="true">⇅</span> Flip origin and destination
+        </button>
+      )}
 
       <div className="distance-card oneway-dest">
         <h3>Destination</h3>

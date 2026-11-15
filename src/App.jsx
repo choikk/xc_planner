@@ -260,6 +260,18 @@ export default function App() {
     setActivePanelTab('results');
   };
 
+  // Swap origin and destination: the destination becomes the home base (origin) and the old origin the destination.
+  // The route restarts from the new origin (stops are cleared by the effect on home/destination changes).
+  const handleFlipOneWay = () => {
+    const newHome = airportData[destCode];
+    if (!newHome || !selectedAirportCode) return;
+    const oldHomeCode = selectedAirportCode;
+    setSelectedCountry(String(newHome.country || 'US').trim());
+    setSelectedState(String(newHome.state || 'unknown').trim());
+    setSelectedAirportCode(destCode);
+    setDestCode(oldHomeCode);
+  };
+
   const handleSelectDestination = (code) => {
     const airport = airportData[code];
     if (!airport) return;
@@ -325,6 +337,7 @@ export default function App() {
     destCandidateCount: destCandidates.length,
     onDestRangeChange: handleDestRangeChange,
     onClearDest: () => setDestCode(''),
+    onFlip: handleFlipOneWay,
     onLegChange: handleOneWayLegChange,
     onClearFrom: handleRemoveOneWayStopsFrom,
     problem: oneWayProblem,
