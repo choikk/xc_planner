@@ -101,17 +101,22 @@ export default function ResultsSection({
   if (oneWay?.active) {
     const { candidates, activeIndex, slotOpen, originCode, destCode, legs, route, onSelectStop } = oneWay;
     const leg = legs[activeIndex] || { min: 0, max: 0 };
+    const sortsDestinations = !destCode && oneWay.destPicking;
+    const sortsStops = Boolean(destCode && slotOpen);
 
     return (
       <section className="panel-section">
-        <div className="sort-row">
-          <span>Sort by</span>
-          <select value={filters.sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="leg_distance">Leg Distance</option>
-            <option value="total_distance">Distance to Destination</option>
-            <option value="alphabetical">Alphabetical</option>
-          </select>
-        </div>
+        {/* Sorting only matters while a candidate list is shown: destination candidates or next-stop candidates. */}
+        {(sortsDestinations || sortsStops) && (
+          <div className="sort-row">
+            <span>Sort by</span>
+            <select value={filters.sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="leg_distance">{sortsDestinations ? 'Distance' : 'Leg Distance'}</option>
+              {sortsStops && <option value="total_distance">Distance to Destination</option>}
+              <option value="alphabetical">Alphabetical</option>
+            </select>
+          </div>
+        )}
 
         {!destCode && oneWay.destPicking ? (
           <>

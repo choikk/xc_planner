@@ -1510,3 +1510,20 @@ details { margin-bottom: .5rem; }
 .oneway-flip:hover {
   background: #eff6ff;
 }
+
+/* Min/max distance boxes: compact, with the unit written next to them. */
+.dual-inputs:has(.range-unit) {
+  grid-template-columns: 1fr auto 1fr auto;
+}
+
+.dual-inputs input[type='number'] {
+  min-height: 34px;
+  padding: .3rem .6rem;
+  border-radius: 10px;
+}
+
+.range-unit {
+  color: #64748b;
+  font-size: .85rem;
+  font-weight: 600;
+}

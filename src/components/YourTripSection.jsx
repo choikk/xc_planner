@@ -69,6 +69,7 @@ function RangeInputs({ range, onChange, label, step = 10, limit = 5000 }) {
         onBlur={commitMax}
         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
       />
+      <span className="range-unit">NM</span>
     </div>
   );
 }
