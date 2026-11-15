@@ -1621,3 +1621,12 @@ details { margin-bottom: .5rem; }
   color: #64748b;
   font-size: .85rem;
 }
+
+/* Keep the date range together: the label wraps first, the dates never break in the middle. */
+.nasr-dates {
+  white-space: nowrap;
+}
+
+.mobile-map-title .nasr-dates {
+  font-size: .62rem;
+}
