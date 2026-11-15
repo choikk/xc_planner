@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import BottomSheet from './components/BottomSheet';
 import FiltersSection from './components/FiltersSection';
 import HomeBaseSection from './components/HomeBaseSection';
@@ -229,6 +229,17 @@ export default function App() {
     setOneWayFinished(false);
   }, [selectedAirportCode, destCode]);
 
+  // Changing the home airport (Home tab, or its automatic re-selection) starts a new trip: the destination is cleared.
+  // Flip origin/destination changes both on purpose, so it marks its own change and keeps the destination.
+  const flippingRef = useRef(false);
+  useEffect(() => {
+    if (flippingRef.current) {
+      flippingRef.current = false;
+      return;
+    }
+    setDestCode('');
+  }, [selectedAirportCode]);
+
   useEffect(() => {
     if (destCode) loadAirportDetails(destCode);
   }, [destCode, loadAirportDetails]);
@@ -279,6 +290,7 @@ export default function App() {
     const newHome = airportData[destCode];
     if (!newHome || !selectedAirportCode) return;
     const oldHomeCode = selectedAirportCode;
+    flippingRef.current = true;
     setSelectedCountry(String(newHome.country || 'US').trim());
     setSelectedState(String(newHome.state || 'unknown').trim());
     setSelectedAirportCode(destCode);
@@ -450,8 +462,17 @@ export default function App() {
     </div>
   );
 
+  // In A -> B, "Finish adding stops" is also offered here (next to Summary Report) as soon as the destination is reachable,
+  // so it is always in view, including on a phone where the Plan tab is long.
+  const canFinishOneWay = Boolean(isOneWay && oneWaySlotOpen && oneWayFinish.canFinish);
+
   const panelFooter = (
     <div className="footer-actions">
+      {canFinishOneWay && (
+        <button type="button" className="primary-btn" onClick={handleFinishOneWay}>
+          Finish adding stops
+        </button>
+      )}
       <button
         type="button"
         className="primary-btn"
@@ -551,6 +572,8 @@ export default function App() {
           onSelectSecondLeg={handleSelectSecondLeg}
         />
       )}
+      {/* The same buttons again at the very bottom, so they are also reachable after scrolling a long page. */}
+      {panelFooter}
     </>
   );
 
@@ -613,7 +636,7 @@ export default function App() {
         <BottomSheet
           state={sheetState}
           setState={setSheetState}
-          hasSummaryAction={summaryReady}
+          hasSummaryAction={summaryReady || canFinishOneWay}
         >
           {mobilePanel}
         </BottomSheet>

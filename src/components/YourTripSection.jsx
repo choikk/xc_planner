@@ -159,7 +159,7 @@ function OneWayPlanner({ oneWay }) {
         {!destAirport && (
           <>
             <div className="field-label">Distance from {homeCode || 'the origin'} (NM)</div>
-            <RangeInputs range={destRange} label="Destination" step={50} onChange={onDestRangeChange} />
+            <RangeInputs range={destRange} label="Destination" onChange={onDestRangeChange} />
             <p className="oneway-hint oneway-hint-tight">
               {destCandidateCount > 0
                 ? `${destCandidateCount} airport${destCandidateCount === 1 ? '' : 's'} match. Click one on the map (or in Results) and choose “Set as Destination”.`
