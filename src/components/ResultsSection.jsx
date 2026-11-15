@@ -108,7 +108,7 @@ export default function ResultsSection({
           <span>Sort by</span>
           <select value={filters.sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="leg_distance">Leg Distance</option>
-            <option value="total_distance">Distance to B</option>
+            <option value="total_distance">Distance to Destination</option>
             <option value="alphabetical">Alphabetical</option>
           </select>
         </div>
@@ -117,7 +117,7 @@ export default function ResultsSection({
           <>
             <h2>Destination Candidates</h2>
             <p className="oneway-hint">
-              {oneWay.destRange.min}–{oneWay.destRange.max} NM from {originCode}. Click an airport to choose it as B.
+              {oneWay.destRange.min}–{oneWay.destRange.max} NM from {originCode}. Click an airport to choose it as the destination.
             </p>
             <div className="results-stack">
               {oneWay.destCandidates.length === 0 ? (
@@ -142,7 +142,7 @@ export default function ResultsSection({
             </div>
           </>
         ) : !destCode ? (
-          <p className="empty-text">Choose a destination (B) in the Plan tab to see stop candidates.</p>
+          <p className="empty-text">Choose a destination in the Plan tab to see stop candidates.</p>
         ) : slotOpen ? (
           <>
             <h2>

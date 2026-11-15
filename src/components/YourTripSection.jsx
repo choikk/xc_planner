@@ -1,5 +1,3 @@
-import CustomSelect from './CustomSelect';
-
 function LegLimitInputs({ leg, index, onChange }) {
   return (
     <div className="dual-inputs">
@@ -32,22 +30,12 @@ function OneWayPlanner({ oneWay }) {
     stops,
     route,
     homeCode,
+    homeAirport,
     destCode,
     destAirport,
-    countries,
-    destCountry,
-    destState,
-    destStates,
-    destAirports,
     slotOpen,
-    activeIndex,
-    onDestCountryChange,
-    onDestStateChange,
-    onDestCodeChange,
-    destMode,
     destRange,
     destCandidateCount,
-    onDestModeChange,
     onDestRangeChange,
     onClearDest,
     problem,
@@ -59,15 +47,6 @@ function OneWayPlanner({ oneWay }) {
     onClearFrom,
   } = oneWay;
 
-  const countryOptions = countries.map((country) => ({ value: country, label: country }));
-  const stateOptions = [
-    { value: '', label: 'Select state…' },
-    ...destStates.map((state) => ({ value: state, label: state })),
-  ];
-  const airportOptions = [
-    { value: '', label: 'Select airport…' },
-    ...destAirports.map((airport) => ({ value: airport.code, label: `${airport.code} - ${airport.name}` })),
-  ];
   const segmentFor = (index) => route.segments[index] || null;
 
   const renderLeg = (index, toLabel) => {
@@ -92,87 +71,56 @@ function OneWayPlanner({ oneWay }) {
 
   return (
     <>
-      <div className="distance-card oneway-dest">
-        <h3>Destination (B)</h3>
-        <div className="oneway-mode-toggle" role="tablist" aria-label="How to choose the destination">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={destMode === 'map'}
-            className={destMode === 'map' ? 'active' : ''}
-            onClick={() => onDestModeChange('map')}
-          >
-            Pick on map
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={destMode === 'list'}
-            className={destMode === 'list' ? 'active' : ''}
-            onClick={() => onDestModeChange('list')}
-          >
-            Choose by state
-          </button>
-        </div>
-
-        {destMode === 'map' ? (
-          <>
-            {!destAirport && (
-              <>
-                <div className="field-label">Distance from {homeCode || 'home base'} (NM)</div>
-                <div className="dual-inputs">
-                  <input
-                    type="number"
-                    aria-label="Destination minimum NM"
-                    value={destRange.min}
-                    min="0"
-                    max="5000"
-                    step="50"
-                    onChange={(e) => onDestRangeChange('min', Number(e.target.value))}
-                  />
-                  <span>-</span>
-                  <input
-                    type="number"
-                    aria-label="Destination maximum NM"
-                    value={destRange.max}
-                    min="0"
-                    max="5000"
-                    step="50"
-                    onChange={(e) => onDestRangeChange('max', Number(e.target.value))}
-                  />
-                </div>
-                <p className="oneway-hint oneway-hint-tight">
-                  {destCandidateCount > 0
-                    ? `${destCandidateCount} airport${destCandidateCount === 1 ? '' : 's'} match. Click one on the map (or in Results) and choose “Set as Destination (B)”.`
-                    : 'No airports match this range and the current filters. Widen the range or relax the filters.'}
-                </p>
-              </>
-            )}
-          </>
+      <div className="distance-card oneway-origin">
+        <h3>Origin</h3>
+        {homeAirport ? (
+          <div className="oneway-dest-card">
+            <strong>{homeCode}</strong> – {homeAirport.airport_name}
+            <div>
+              {homeAirport.city}, {homeAirport.state === 'unknown' ? 'N/A' : homeAirport.state}
+            </div>
+            <div>
+              Elevation {homeAirport.elevation} ft · Class {homeAirport.airspace} · Fuel {homeAirport.fuel}
+            </div>
+            <div className="oneway-hint oneway-hint-tight">Change the origin in the Home tab.</div>
+          </div>
         ) : (
+          <p className="empty-text">Select a home base in the Home tab.</p>
+        )}
+      </div>
+
+      <div className="distance-card oneway-dest">
+        <h3>Destination</h3>
+
+        {!destAirport && (
           <>
-            <div className="field-label">Country</div>
-            <CustomSelect
-              value={destCountry}
-              options={countryOptions}
-              onChange={onDestCountryChange}
-              ariaLabel="Destination country"
-            />
-            <div className="field-label">State</div>
-            <CustomSelect
-              value={destState}
-              options={stateOptions}
-              onChange={onDestStateChange}
-              ariaLabel="Destination state"
-            />
-            <div className="field-label">Airport</div>
-            <CustomSelect
-              value={destCode}
-              options={airportOptions}
-              onChange={onDestCodeChange}
-              ariaLabel="Destination airport"
-              disabled={!destState}
-            />
+            <div className="field-label">Distance from {homeCode || 'the origin'} (NM)</div>
+            <div className="dual-inputs">
+              <input
+                type="number"
+                aria-label="Destination minimum NM"
+                value={destRange.min}
+                min="0"
+                max="5000"
+                step="50"
+                onChange={(e) => onDestRangeChange('min', Number(e.target.value))}
+              />
+              <span>-</span>
+              <input
+                type="number"
+                aria-label="Destination maximum NM"
+                value={destRange.max}
+                min="0"
+                max="5000"
+                step="50"
+                onChange={(e) => onDestRangeChange('max', Number(e.target.value))}
+              />
+            </div>
+            <p className="oneway-hint oneway-hint-tight">
+              {destCandidateCount > 0
+                ? `${destCandidateCount} airport${destCandidateCount === 1 ? '' : 's'} match. Click one on the map (or in Results) and choose “Set as Destination”.`
+                : 'No airports match this range and the current filters. Widen the range or relax the filters.'}
+            </p>
           </>
         )}
 
@@ -182,20 +130,16 @@ function OneWayPlanner({ oneWay }) {
             <div>
               {destAirport.city}, {destAirport.state === 'unknown' ? 'N/A' : destAirport.state}
             </div>
-            {destMode === 'map' && (
-              <button type="button" className="oneway-link" onClick={onClearDest}>
-                Change destination
-              </button>
-            )}
+            <button type="button" className="oneway-link" onClick={onClearDest}>
+              Change destination
+            </button>
           </div>
         )}
       </div>
 
       {!destAirport ? (
         <p className="empty-text">
-          {destMode === 'map'
-            ? `Set the distance range and click an airport on the map to choose where to go from ${homeCode || 'your home base'}.`
-            : `Select a destination airport to plan a one-way route from ${homeCode || 'your home base'}.`}
+          Set the distance range and click an airport on the map to choose where to go from {homeCode || 'the origin'}.
         </p>
       ) : (
         <div className="oneway-route">

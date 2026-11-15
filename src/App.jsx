@@ -64,10 +64,7 @@ export default function App() {
   const [homeRestored, setHomeRestored] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('home');
   // One-way (A -> B) planning: destination, per-leg distance limits and the stops picked so far.
-  const [destCountry, setDestCountry] = useState('US');
-  const [destState, setDestState] = useState('');
   const [destCode, setDestCode] = useState('');
-  const [destMode, setDestMode] = useState('map');          // 'map' (pick within a distance range) or 'list' (country/state/airport)
   const [destRange, setDestRange] = useState({ min: 100, max: 500 });
   const [oneWayLegs, setOneWayLegs] = useState([DEFAULT_ONE_WAY_LEG]);
   const [oneWayStops, setOneWayStops] = useState([]);
@@ -84,16 +81,6 @@ export default function App() {
     const key = `${selectedCountry}-${selectedState}`;
     return (locationIndex.airportsByState[key] || []).slice().sort((a, b) => a.code.localeCompare(b.code));
   }, [locationIndex, selectedCountry, selectedState]);
-
-  const destStates = useMemo(() => {
-    const set = locationIndex.statesByCountry[destCountry];
-    return set ? [...set].sort() : [];
-  }, [locationIndex, destCountry]);
-
-  const destAirports = useMemo(() => {
-    const key = `${destCountry}-${destState}`;
-    return (locationIndex.airportsByState[key] || []).slice().sort((a, b) => a.code.localeCompare(b.code));
-  }, [locationIndex, destCountry, destState]);
 
   const selectedAirport = airportData[selectedAirportCode] || null;
   const destAirport = useMemo(
@@ -136,7 +123,7 @@ export default function App() {
     if (oneWayFinished !== oneWayDone) setOneWayFinished(oneWayDone);
   }, [effectiveStops, oneWayStops, oneWayDone, oneWayFinished]);
 
-  const destPicking = Boolean(isOneWay && destMode === 'map' && !destCode && selectedAirport);
+  const destPicking = Boolean(isOneWay && !destCode && selectedAirport);
   const destCandidates = useMemo(() => {
     if (!destPicking) return [];
     return findDestinationCandidates(airportData, selectedAirportCode, destRange, filters);
@@ -273,22 +260,9 @@ export default function App() {
     setActivePanelTab('results');
   };
 
-  const handleDestCountryChange = (country) => {
-    setDestCountry(country);
-    setDestState('');
-    setDestCode('');
-  };
-
-  const handleDestStateChange = (state) => {
-    setDestState(state);
-    setDestCode('');
-  };
-
   const handleSelectDestination = (code) => {
     const airport = airportData[code];
     if (!airport) return;
-    setDestCountry(airport.country || 'US');
-    setDestState(airport.state || 'unknown');
     setDestCode(code);
     loadAirportDetails(code);
   };
@@ -357,19 +331,11 @@ export default function App() {
     destCode,
     destAirport,
     countries,
-    destCountry,
-    destState,
-    destStates,
-    destAirports,
+    homeAirport: selectedAirportWithCode,
     slotOpen: oneWaySlotOpen,
     activeIndex: oneWayActiveIndex,
-    onDestCountryChange: handleDestCountryChange,
-    onDestStateChange: handleDestStateChange,
-    onDestCodeChange: setDestCode,
-    destMode,
     destRange,
     destCandidateCount: destCandidates.length,
-    onDestModeChange: setDestMode,
     onDestRangeChange: handleDestRangeChange,
     onClearDest: () => setDestCode(''),
     onLegChange: handleOneWayLegChange,

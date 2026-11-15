@@ -361,7 +361,7 @@ export function describeOneWayStuck(airportData, originCode, destCode, leg) {
   return `${destCode} is ${distance.toFixed(0)} NM from ${originCode}, but no airport ${leg.min}–${leg.max} NM away is closer to ${destCode} with the current filters. Raise the maximum, lower the minimum, or relax the filters.`;
 }
 
-// Airports that can be chosen as the destination (B) when picking it on the map: filters + a min/max distance from the home base.
+// Airports that can be chosen as the destination when picking it on the map: filters + a min/max distance from the home base.
 export function findDestinationCandidates(airportData, homeCode, range, filters) {
   const home = airportData[homeCode];
   if (!home) return [];

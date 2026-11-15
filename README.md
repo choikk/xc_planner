@@ -18,12 +18,23 @@ XC Planner v2 is a React/Vite cross-country flight planning app for U.S. general
 
 Under Plan > Your Trip, the **A → B** mode plans a one-way route from the home base to a destination, with no return leg. The route is built in order:
 
-1. **Choose the destination (B) first.** Set a minimum and maximum distance from the home base and click one of the airports that fit on the map (or use **Choose by state** to pick it by country, state, and airport).
+1. **Choose the destination first.** The Origin card shows the home base. Set a minimum and maximum distance from it and click one of the airports that fit on the map (or in Results), then choose **Set as Destination**.
 2. **Set the distance range of the next leg** (minimum and maximum NM), then click an airport on the map (or in Results). The dots shown pass the filters, lie inside the leg's range, and are closer to B than where you are now. Results marks candidates from which B is reachable with the next leg.
 3. **Repeat for each leg.** Every leg has its own range (a new leg starts with the previous leg's limits), and you can add as many stops as you need.
 4. **Finish adding stops** once B falls inside the current leg's range (button in the Plan tab, Results, or B's map popup); the last leg then goes straight to B.
 - Changing a leg range, the filters, the home base, or the destination drops any stop that no longer fits. **Clear** removes a stop and everything after it.
 - When the route is finished and every leg is within its range, **Summary Report** produces the same PDF/text report for the whole route.
+
+## Airport Diagrams
+
+Airport diagrams come from the FAA d-TPP data (PDF). When an airport has none, the planner falls back to the AOPA diagram image
+(`https://www.aopa.org/ustprocs/airportgraphics/gif/tn_<FAA id>_tif.gif`) if AOPA has one:
+
+- The map popups, the summary preview, and the text report show an "Airport Diagram (AOPA)" link (existence is checked in the browser when needed).
+- In the summary preview it can be ticked like the FAA diagram and plates. The GIF is fetched through the API (`/api/airport-data?plateUrl=...`,
+  which only proxies that exact AOPA file pattern, plus FAA hosts), converted in the browser, and appended to the PDF report as its own page.
+  Nothing is stored on the server.
+- Only U.S. airports whose code maps unambiguously to an FAA identifier are looked up (`K` + 3 letters, or codes with a digit).
 
 ## Current Scope
 

@@ -16,6 +16,7 @@ import {
 import L from 'leaflet';
 import { computeEllipsePoints, formatSurface, getAirspaceColor, haversine } from '../utils/geo';
 import { formatDecommissionedNote } from '../utils/decommissioned';
+import { useAopaDiagramUrl } from '../utils/aopa';
 
 const homeIcon = new L.Icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -190,6 +191,37 @@ function MapBackgroundReset({ enabled, onBackgroundClick, suppressResetRef }) {
   return null;
 }
 
+// FAA airport diagram (PDF) when there is one; otherwise the AOPA diagram image when AOPA has it.
+function AirportDiagramBlock({ airport }) {
+  const faaUrl = airport.diagram?.pdf_url || '';
+  const aopa = useAopaDiagramUrl(airport, !faaUrl);
+
+  if (faaUrl) {
+    return (
+      <ul className="popup-list">
+        <li>
+          <a href={faaUrl} target="_blank" rel="noreferrer">
+            Airport Diagram
+          </a>
+        </li>
+      </ul>
+    );
+  }
+  if (aopa === 'checking') return <div>Checking AOPA…</div>;
+  if (aopa) {
+    return (
+      <ul className="popup-list">
+        <li>
+          <a href={aopa} target="_blank" rel="noreferrer">
+            Airport Diagram (AOPA)
+          </a>
+        </li>
+      </ul>
+    );
+  }
+  return <div>None</div>;
+}
+
 function renderAirportPopupContent(airport, extraLines = []) {
   const approaches = Array.isArray(airport.approaches) ? airport.approaches : [];
   const decommissionedNote = formatDecommissionedNote(airport);
@@ -233,17 +265,7 @@ function renderAirportPopupContent(airport, extraLines = []) {
           )}
 
           <div className="popup-section-title">Airport Diagram:</div>
-          {airport.diagram?.pdf_url ? (
-            <ul className="popup-list">
-              <li>
-                <a href={airport.diagram.pdf_url} target="_blank" rel="noreferrer">
-                  Airport Diagram
-                </a>
-              </li>
-            </ul>
-          ) : (
-            <div>None</div>
-          )}
+          <AirportDiagramBlock airport={airport} />
 
           <div className="popup-section-title">Instrument Approaches:</div>
           {approaches.length > 0 ? (
@@ -884,7 +906,7 @@ export default function MapView({
                     className="popup-summary-btn"
                     onClick={() => oneWay.onSelectDest(result.code)}
                   >
-                    Set as Destination (B)
+                    Set as Destination
                   </button>
                 </Popup>
               </CircleMarker>
@@ -932,7 +954,7 @@ export default function MapView({
             >
               <Popup minWidth={290} maxWidth={480}>
                 {renderAirportPopupContent(oneWayDest, [
-                  'Destination (B)',
+                  'Destination',
                   ...(oneWay.slotOpen && oneWay.finishInfo
                     ? [`From here: ${oneWay.finishInfo.distance.toFixed(1)} NM`]
                     : []),

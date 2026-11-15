@@ -37,6 +37,15 @@ function isAllowedApproachHost(hostname) {
   return normalized === 'faa.gov' || normalized.endsWith('.faa.gov');
 }
 
+// AOPA airport-diagram thumbnails (fallback when the FAA has no airport diagram). Only that exact file pattern is proxied.
+const AOPA_DIAGRAM_PATH = /^\/ustprocs\/airportgraphics\/gif\/tn_[A-Z0-9]{3,4}_tif\.gif$/;
+
+function isAllowedPlateUrl(url) {
+  if (url.protocol !== 'https:') return false;
+  if (isAllowedApproachHost(url.hostname)) return true;
+  return url.hostname.toLowerCase() === 'www.aopa.org' && AOPA_DIAGRAM_PATH.test(url.pathname) && !url.search;
+}
+
 function normalizeDetailedAirport(row) {
   const fboContacts = Array.isArray(row.fbo_contacts) ? row.fbo_contacts : safeObject(row.fbo_contacts);
   const normalizedContacts = Array.isArray(fboContacts)
@@ -112,7 +121,7 @@ export async function handler(event) {
     const plateUrl = event.queryStringParameters?.plateUrl;
     if (plateUrl) {
       const targetUrl = new URL(plateUrl);
-      if (targetUrl.protocol !== 'https:' || !isAllowedApproachHost(targetUrl.hostname)) {
+      if (!isAllowedPlateUrl(targetUrl)) {
         return {
           statusCode: 400,
           headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -122,7 +131,7 @@ export async function handler(event) {
 
       const plateResponse = await fetch(targetUrl.toString(), {
         headers: {
-          accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.5',
+          accept: 'application/pdf,image/gif;q=0.9,application/octet-stream;q=0.8,*/*;q=0.5',
         },
       });
 
