@@ -93,6 +93,33 @@ function legInfoDivIcon(code) {
   });
 }
 
+function destinationDivIcon() {
+  return L.divIcon({
+    className: 'oneway-marker-wrapper',
+    html: '<div class="oneway-marker oneway-marker-b">B</div>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+}
+
+function stopNumberDivIcon(number) {
+  return L.divIcon({
+    className: 'oneway-marker-wrapper',
+    html: `<div class="oneway-marker oneway-marker-stop">${number}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function legLabelDivIcon(text) {
+  return L.divIcon({
+    className: 'oneway-leg-label-wrapper',
+    html: `<div class="oneway-leg-label">${escapeHtml(text)}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
 function isFiniteCoord(lat, lon) {
   return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
 }
@@ -112,6 +139,38 @@ function MapAutoView({ homeAirport }) {
 
     map.setView([homeAirport.lat, homeAirport.lon], 7);
   }, [map, homeCode, homeAirport?.lat, homeAirport?.lon]);
+
+  return null;
+}
+
+function MapFitRoute({ homeAirport, destAirport }) {
+  const map = useMap();
+  const homeCode = homeAirport?.airport_code || '';
+  const destCode = destAirport?.airport_code || '';
+
+  useEffect(() => {
+    if (!homeAirport || !destAirport) return;
+    if (!isFiniteCoord(homeAirport.lat, homeAirport.lon) || !isFiniteCoord(destAirport.lat, destAirport.lon)) return;
+    map.fitBounds(
+      [
+        [homeAirport.lat, homeAirport.lon],
+        [destAirport.lat, destAirport.lon],
+      ],
+      { padding: [60, 60], maxZoom: 9 }
+    );
+  }, [map, homeCode, destCode]);
+
+  return null;
+}
+
+function MapFitRange({ homeAirport, maxNm }) {
+  const map = useMap();
+  const homeCode = homeAirport?.airport_code || '';
+
+  useEffect(() => {
+    if (!homeAirport || !isFiniteCoord(homeAirport.lat, homeAirport.lon) || !(maxNm > 0)) return;
+    map.fitBounds(L.latLng(homeAirport.lat, homeAirport.lon).toBounds(maxNm * 1852 * 2), { padding: [20, 20] });
+  }, [map, homeCode, maxNm]);
 
   return null;
 }
@@ -239,7 +298,28 @@ export default function MapView({
   onOpenSummary,
   airportData,
   onRequestAirportDetails,
+  oneWay = null,
 }) {
+  const oneWayActive = Boolean(oneWay?.active);
+  const oneWayDest = oneWayActive ? oneWay.destAirport : null;
+  const oneWayStopAirports = oneWayActive
+    ? oneWay.stops
+        .map((code) => ({ code, airport: airportData[code] }))
+        .filter(({ airport }) => airport && isFiniteCoord(airport.lat, airport.lon))
+    : [];
+  const oneWayOrigin = oneWayActive && oneWay.slotOpen ? airportData[oneWay.originCode] : null;
+  const oneWayLeg = oneWayActive && oneWay.slotOpen ? oneWay.legs[oneWay.activeIndex] : null;
+  const oneWayPath = [];
+  if (oneWayActive && homeAirport && isFiniteCoord(homeAirport.lat, homeAirport.lon)) {
+    oneWayPath.push({ code: homeAirport.airport_code, lat: homeAirport.lat, lon: homeAirport.lon });
+    oneWayStopAirports.forEach(({ code, airport }) => oneWayPath.push({ code, lat: airport.lat, lon: airport.lon }));
+  }
+  const oneWayDestPoint =
+    oneWayDest && isFiniteCoord(oneWayDest.lat, oneWayDest.lon)
+      ? { code: oneWayDest.airport_code, lat: oneWayDest.lat, lon: oneWayDest.lon }
+      : null;
+  const oneWayRouteComplete = Boolean(oneWayActive && oneWay.route?.complete);
+  const oneWaySolidPath = oneWayRouteComplete && oneWayDestPoint ? [...oneWayPath, oneWayDestPoint] : oneWayPath;
   const [infoPopup, setInfoPopup] = useState(null);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const [touchMode, setTouchMode] = useState(false);
@@ -440,16 +520,28 @@ export default function MapView({
         )}
       </div>
 
+      {oneWayActive && oneWay.slotOpen && oneWay.candidates.length === 0 && !oneWay.finishInfo?.canFinish && (
+        <div className="oneway-map-note">
+          {oneWay.problem || 'No airports match this leg. Widen the leg limits or relax the filters.'}
+        </div>
+      )}
+
       <TileLayer
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <MapAutoView
-        homeAirport={homeAirport}
-      />
+      {oneWayActive && oneWayDest ? (
+        <MapFitRoute homeAirport={homeAirport} destAirport={oneWayDest} />
+      ) : oneWayActive && oneWay.destPicking ? (
+        <MapFitRange homeAirport={homeAirport} maxNm={oneWay.destRange.max} />
+      ) : (
+        <MapAutoView
+          homeAirport={homeAirport}
+        />
+      )}
       <MapBackgroundReset
-        enabled={Boolean(selectedFirstLegCode || selectedSecondLegCode)}
+        enabled={Boolean(selectedFirstLegCode || selectedSecondLegCode) && !oneWayActive}
         onBackgroundClick={onClearSelections}
         suppressResetRef={suppressBackgroundResetRef}
       />
@@ -472,16 +564,20 @@ export default function MapView({
             </Popup>
           </Marker>
 
-          <Circle
-            center={homeCenter}
-            radius={minMeters}
-            pathOptions={{ color: 'green', dashArray: '6 6', fill: false }}
-          />
-          <Circle
-            center={homeCenter}
-            radius={maxMeters}
-            pathOptions={{ color: 'red', dashArray: '6 6', fill: false }}
-          />
+          {!oneWayActive && (
+            <>
+              <Circle
+                center={homeCenter}
+                radius={minMeters}
+                pathOptions={{ color: 'green', dashArray: '6 6', fill: false }}
+              />
+              <Circle
+                center={homeCenter}
+                radius={maxMeters}
+                pathOptions={{ color: 'red', dashArray: '6 6', fill: false }}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -721,6 +817,195 @@ export default function MapView({
             },
           }}
         />
+      )}
+
+      {oneWayActive && (
+        <>
+          {oneWayOrigin && oneWayLeg && isFiniteCoord(oneWayOrigin.lat, oneWayOrigin.lon) && (
+            <>
+              <Circle
+                center={[oneWayOrigin.lat, oneWayOrigin.lon]}
+                radius={oneWayLeg.min * 1852}
+                pathOptions={{ color: 'green', dashArray: '6 6', fill: false }}
+              />
+              <Circle
+                center={[oneWayOrigin.lat, oneWayOrigin.lon]}
+                radius={oneWayLeg.max * 1852}
+                pathOptions={{ color: 'red', dashArray: '6 6', fill: false }}
+              />
+            </>
+          )}
+
+          {oneWay.destPicking && oneWay.destRange && homeAirport && isFiniteCoord(homeAirport.lat, homeAirport.lon) && (
+            <>
+              <Circle
+                center={[homeAirport.lat, homeAirport.lon]}
+                radius={oneWay.destRange.min * 1852}
+                pathOptions={{ color: 'green', dashArray: '6 6', fill: false }}
+              />
+              <Circle
+                center={[homeAirport.lat, homeAirport.lon]}
+                radius={oneWay.destRange.max * 1852}
+                pathOptions={{ color: 'red', dashArray: '6 6', fill: false }}
+              />
+            </>
+          )}
+
+          {(oneWay.destCandidates || []).map((result) => {
+            const airport = airportData[result.code];
+            if (!airport || !isFiniteCoord(airport.lat, airport.lon)) return null;
+            const color = getAirspaceColor(airport.airspace);
+
+            return (
+              <CircleMarker
+                key={`oneway-dest-${result.code}`}
+                center={[airport.lat, airport.lon]}
+                radius={6}
+                eventHandlers={{
+                  click: markMapInteraction,
+                  popupopen: () => onRequestAirportDetails?.(result.code),
+                }}
+                pathOptions={withAccessStyle(airport, {
+                  color,
+                  fillColor: color,
+                  fillOpacity: 0.85,
+                  weight: 2,
+                })}
+              >
+                {showHoverTooltips && (
+                  <Tooltip direction="top" offset={[0, -8]}>
+                    {result.code} · {result.distance.toFixed(0)} NM
+                  </Tooltip>
+                )}
+                <Popup minWidth={290} maxWidth={480}>
+                  {renderAirportPopupContent(airport, [`Distance from ${homeAirport?.airport_code || 'A'}: ${result.distance.toFixed(1)} NM`])}
+                  <button
+                    type="button"
+                    className="popup-summary-btn"
+                    onClick={() => oneWay.onSelectDest(result.code)}
+                  >
+                    Set as Destination (B)
+                  </button>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+
+          {oneWaySolidPath.length > 1 && (
+            <Polyline
+              positions={oneWaySolidPath.map((point) => [point.lat, point.lon])}
+              pathOptions={{ color: '#FF00FF', weight: 4 }}
+            />
+          )}
+          {!oneWayRouteComplete && oneWayDestPoint && oneWayPath.length > 0 && (
+            <Polyline
+              positions={[
+                [oneWayPath[oneWayPath.length - 1].lat, oneWayPath[oneWayPath.length - 1].lon],
+                [oneWayDestPoint.lat, oneWayDestPoint.lon],
+              ]}
+              pathOptions={{ color: '#475569', weight: 2, dashArray: '4 8' }}
+            />
+          )}
+
+          {oneWaySolidPath.slice(1).map((point, index) => {
+            const from = oneWaySolidPath[index];
+            const distance = haversine(from.lat, from.lon, point.lat, point.lon);
+            return (
+              <Marker
+                key={`label-${from.code}-${point.code}`}
+                position={[(from.lat + point.lat) / 2, (from.lon + point.lon) / 2]}
+                icon={legLabelDivIcon(`${distance.toFixed(1)} NM`)}
+                interactive={false}
+              />
+            );
+          })}
+
+          {oneWayDestPoint && (
+            <Marker
+              position={[oneWayDestPoint.lat, oneWayDestPoint.lon]}
+              icon={destinationDivIcon()}
+              zIndexOffset={900}
+              eventHandlers={{
+                click: markMapInteraction,
+                popupopen: () => onRequestAirportDetails?.(oneWayDestPoint.code),
+              }}
+            >
+              <Popup minWidth={290} maxWidth={480}>
+                {renderAirportPopupContent(oneWayDest, [
+                  'Destination (B)',
+                  ...(oneWay.slotOpen && oneWay.finishInfo
+                    ? [`From here: ${oneWay.finishInfo.distance.toFixed(1)} NM`]
+                    : []),
+                ])}
+                {oneWay.slotOpen && oneWay.finishInfo?.canFinish && (
+                  <button type="button" className="popup-summary-btn" onClick={() => oneWay.onFinish()}>
+                    Finish adding stops
+                  </button>
+                )}
+              </Popup>
+            </Marker>
+          )}
+
+          {oneWay.candidates.map((result) => {
+            const airport = airportData[result.code];
+            if (!airport || !isFiniteCoord(airport.lat, airport.lon)) return null;
+            const color = getAirspaceColor(airport.airspace);
+
+            return (
+              <CircleMarker
+                key={`oneway-cand-${result.code}`}
+                center={[airport.lat, airport.lon]}
+                radius={7}
+                eventHandlers={{
+                  click: markMapInteraction,
+                  popupopen: () => onRequestAirportDetails?.(result.code),
+                }}
+                pathOptions={withAccessStyle(airport, {
+                  color,
+                  fillColor: color,
+                  fillOpacity: 0.88,
+                  weight: 2,
+                })}
+              >
+                {showHoverTooltips && (
+                  <Tooltip direction="top" offset={[0, -8]}>
+                    {result.code} · {result.distance.toFixed(0)} NM
+                  </Tooltip>
+                )}
+                <Popup minWidth={290} maxWidth={480}>
+                  {renderAirportPopupContent(airport, [
+                    `Leg ${oneWay.activeIndex + 1}: ${result.distance.toFixed(1)} NM`,
+                    `To ${oneWayDest?.airport_code || 'B'}: ${result.toDest.toFixed(1)} NM`,
+                  ])}
+                  <button
+                    type="button"
+                    className="popup-summary-btn"
+                    onClick={() => oneWay.onSelectStop(result.code)}
+                  >
+                    Add as Stop {oneWay.activeIndex + 1}
+                  </button>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+
+          {oneWayStopAirports.map(({ code, airport }, index) => (
+            <Marker
+              key={`oneway-stop-${code}`}
+              position={[airport.lat, airport.lon]}
+              icon={stopNumberDivIcon(index + 1)}
+              zIndexOffset={800}
+              eventHandlers={{
+                click: markMapInteraction,
+                popupopen: () => onRequestAirportDetails?.(code),
+              }}
+            >
+              <Popup minWidth={290} maxWidth={480}>
+                {renderAirportPopupContent(airport, [`Stop ${index + 1}`])}
+              </Popup>
+            </Marker>
+          ))}
+        </>
       )}
     </MapContainer>
   );

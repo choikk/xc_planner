@@ -321,7 +321,7 @@ details { margin-bottom: .65rem; }
 
 .segmented {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: .5rem;
   margin: 1rem 0;
 }
@@ -1163,4 +1163,283 @@ details { margin-bottom: .65rem; }
   margin-top: 6px;
   font-size: 0.85em;
   color: #64748b;
+}
+
+
+/* ---------- One-way (A -> B) planning ---------- */
+.segmented button {
+  padding: 0 .35rem;
+  font-size: .88rem;
+}
+
+.oneway-dest {
+  margin-bottom: .8rem;
+}
+
+.oneway-dest-card {
+  margin-top: .6rem;
+  padding: .55rem .65rem;
+  border: 1px solid #dbe6f2;
+  border-radius: 10px;
+  background: #fff;
+  font-size: .88rem;
+  color: #334155;
+}
+
+.oneway-route h3 {
+  margin: 1rem 0 .4rem;
+  font-size: .95rem;
+}
+
+.oneway-hint {
+  margin: 0 0 .7rem;
+  color: #64748b;
+  font-size: .82rem;
+  line-height: 1.35;
+}
+
+.oneway-leg {
+  margin: .5rem 0 .5rem 1rem;
+  padding: .55rem .65rem;
+  border-left: 3px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 0 10px 10px 0;
+}
+
+.oneway-leg-head {
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .4rem;
+  font-size: .85rem;
+}
+
+.oneway-leg-to {
+  color: #64748b;
+}
+
+.oneway-leg-result {
+  margin-top: .4rem;
+  font-size: .82rem;
+  color: #475569;
+}
+
+.oneway-leg-result.ok {
+  color: #15803d;
+}
+
+.oneway-leg-result.bad {
+  color: #b91c1c;
+}
+
+.oneway-point {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .45rem .6rem;
+  border: 1px solid #dbe6f2;
+  border-radius: 12px;
+  background: #fff;
+  font-size: .9rem;
+}
+
+.oneway-point.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .15);
+}
+
+.oneway-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.oneway-point-a .oneway-badge {
+  background: #111827;
+}
+
+.oneway-point-b .oneway-badge {
+  background: #dc2626;
+}
+
+.oneway-pick {
+  color: #2563eb;
+  font-size: .85rem;
+}
+
+.oneway-pick.muted {
+  color: #94a3b8;
+}
+
+.oneway-point-actions {
+  display: flex;
+  gap: .6rem;
+  margin-left: auto;
+}
+
+.oneway-link {
+  border: 0;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.oneway-link.danger {
+  color: #b91c1c;
+}
+
+.oneway-total {
+  margin-top: .8rem;
+  padding: .55rem .7rem;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: .88rem;
+}
+
+.oneway-total.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.oneway-total.bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.oneway-marker-wrapper,
+.oneway-leg-label-wrapper {
+  background: transparent;
+  border: 0;
+}
+
+.oneway-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .4);
+  color: #fff;
+  font-size: .85rem;
+  font-weight: 800;
+}
+
+.oneway-marker-stop {
+  background: #d946ef;
+}
+
+.oneway-marker-b {
+  width: 30px;
+  height: 30px;
+  background: #dc2626;
+}
+
+.oneway-leg-label {
+  transform: translate(-50%, -50%);
+  width: max-content;
+  padding: .1rem .4rem;
+  border: 1px solid #d946ef;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .95);
+  color: #86198f;
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.oneway-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .4rem;
+  margin-bottom: .6rem;
+}
+
+.oneway-mode-toggle button {
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+}
+
+.oneway-mode-toggle button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.oneway-hint-tight {
+  margin: .5rem 0 0;
+}
+
+.oneway-warn {
+  margin-top: .8rem;
+  padding: .6rem .7rem;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: .85rem;
+  line-height: 1.4;
+}
+
+.oneway-map-note {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(520px, calc(100% - 90px));
+  padding: .65rem .85rem;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background: rgba(255, 251, 235, .97);
+  color: #92400e;
+  font-size: .85rem;
+  line-height: 1.4;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, .18);
+  pointer-events: none;
+}
+
+.oneway-remaining {
+  margin: .5rem 0 .5rem 1rem;
+  font-size: .85rem;
+  color: #475569;
+}
+
+.oneway-actions {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+.oneway-actions button {
+  min-height: 44px;
+  padding: 0 .5rem;
+  font: inherit;
+  font-weight: 600;
+}
+
+.result-card-note {
+  margin-top: .2rem;
+  color: #15803d;
+  font-size: .82rem;
 }

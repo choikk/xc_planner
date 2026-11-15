@@ -9,3 +9,12 @@ export function formatNasrEffective(effectiveDate) {
   const end = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day) + CYCLE_DAYS));
   return `${effectiveDate} to ${end.toISOString().slice(0, 10)}`;
 }
+
+// Short form for the header: "2026-10-29" -> "2026-10-29 to 11-26" (the end year is kept only when the cycle crosses a year).
+export function formatNasrEffectiveShort(effectiveDate) {
+  const full = formatNasrEffective(effectiveDate);
+  const match = /^(\d{4})-\d{2}-\d{2} to (\d{4})-(\d{2}-\d{2})$/.exec(full);
+  if (!match) return full;
+  const [, startYear, endYear, endMonthDay] = match;
+  return `${effectiveDate} to ${startYear === endYear ? endMonthDay : `${endYear}-${endMonthDay}`}`;
+}

@@ -94,8 +94,128 @@ export default function ResultsSection({
   setFilters,
   onSelectFirstLeg,
   onSelectSecondLeg,
+  oneWay = null,
 }) {
   const setSortBy = (value) => setFilters((current) => ({ ...current, sortBy: value }));
+
+  if (oneWay?.active) {
+    const { candidates, activeIndex, slotOpen, originCode, destCode, legs, route, onSelectStop } = oneWay;
+    const leg = legs[activeIndex] || { min: 0, max: 0 };
+
+    return (
+      <section className="panel-section">
+        <div className="sort-row">
+          <span>Sort by</span>
+          <select value={filters.sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="leg_distance">Leg Distance</option>
+            <option value="total_distance">Distance to B</option>
+            <option value="alphabetical">Alphabetical</option>
+          </select>
+        </div>
+
+        {!destCode && oneWay.destPicking ? (
+          <>
+            <h2>Destination Candidates</h2>
+            <p className="oneway-hint">
+              {oneWay.destRange.min}–{oneWay.destRange.max} NM from {originCode}. Click an airport to choose it as B.
+            </p>
+            <div className="results-stack">
+              {oneWay.destCandidates.length === 0 ? (
+                <p className="empty-text">No airports match this range and the current filters.</p>
+              ) : (
+                oneWay.destCandidates.map((result) => {
+                  const airport = airportData[result.code];
+                  return (
+                    <ResultCard
+                      key={result.code}
+                      code={result.code}
+                      name={`${airport.airport_name} — ${airport.city}, ${formatStateCode(airport.state)}`}
+                      distance={`${result.distance.toFixed(1)} NM`}
+                      active={false}
+                      onClick={() => oneWay.onSelectDest(result.code)}
+                    >
+                      <div>Class {airport.airspace} · Fuel {airport.fuel}</div>
+                    </ResultCard>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : !destCode ? (
+          <p className="empty-text">Choose a destination (B) in the Plan tab to see stop candidates.</p>
+        ) : slotOpen ? (
+          <>
+            <h2>
+              Stop {activeIndex + 1} Candidates
+            </h2>
+            <p className="oneway-hint">
+              {leg.min}–{leg.max} NM from {originCode}, closer to {destCode} than {originCode} is.
+            </p>
+            <div className="results-stack">
+              {oneWay.finishInfo?.canFinish && (
+                <ResultCard
+                  key="finish"
+                  code={destCode}
+                  name={`Finish adding stops — ${airportData[destCode]?.airport_name || ''}`}
+                  distance={`${oneWay.finishInfo.distance.toFixed(1)} NM`}
+                  active
+                  onClick={() => oneWay.onFinish()}
+                >
+                  <div>{destCode} is inside this leg&apos;s range.</div>
+                </ResultCard>
+              )}
+              {candidates.length === 0 && !oneWay.finishInfo?.canFinish ? (
+                <p className="empty-text">
+                  {oneWay.problem
+                    ? oneWay.problem
+                    : 'No airports match this leg. Widen the leg limits or relax the filters.'}
+                </p>
+              ) : (
+                candidates.map((result) => {
+                  const airport = airportData[result.code];
+                  return (
+                    <ResultCard
+                      key={result.code}
+                      code={result.code}
+                      name={`${airport.airport_name} — ${airport.city}, ${formatStateCode(airport.state)}`}
+                      distance={`${result.distance.toFixed(1)} NM`}
+                      active={false}
+                      onClick={() => onSelectStop(result.code)}
+                    >
+                      <div>
+                        To {destCode}: {result.toDest.toFixed(1)} NM · Class {airport.airspace} · Fuel {airport.fuel}
+                      </div>
+                      {result.toDest >= leg.min && result.toDest <= leg.max && (
+                        <div className="result-card-note">{destCode} is reachable with the next leg ✓</div>
+                      )}
+                    </ResultCard>
+                  );
+                })
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <h2>Route</h2>
+            <div className="results-stack">
+              {route.segments.map((segment) => (
+                <div key={`${segment.from}-${segment.to}`} className={`oneway-leg-result ${segment.ok ? 'ok' : 'bad'}`}>
+                  {segment.from} → {segment.to}: {segment.distance.toFixed(1)} NM
+                  {segment.ok ? ' ✓' : ` (limit ${segment.min}–${segment.max} NM)`}
+                </div>
+              ))}
+              {route.complete && <div className="oneway-total">Total {route.total.toFixed(1)} NM</div>}
+            </div>
+            <p className="oneway-hint">
+              {route.allOk
+                ? 'All stops are chosen. Use Summary Report for the trip summary.'
+                : 'Adjust the leg limits or clear a stop to continue.'}
+            </p>
+          </>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="panel-section">

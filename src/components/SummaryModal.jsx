@@ -388,7 +388,7 @@ function drawCanvasMarker(ctx, x, y, code, isHome) {
   ctx.restore();
 }
 
-async function createRouteMapImageData(stops, width = 1000, height = 640) {
+async function createRouteMapImageData(stops, width = 1000, height = 640, closed = true) {
   const validStops = stops.filter(({ airport }) => (
     Number.isFinite(airport?.lat) && Number.isFinite(airport?.lon)
   ));
@@ -445,7 +445,8 @@ async function createRouteMapImageData(stops, width = 1000, height = 640) {
     Math.round(x - topLeft[0]),
     Math.round(y - topLeft[1]),
   ]);
-  canvasRoutePoints.push(canvasRoutePoints[0]);
+  const markerPoints = [...canvasRoutePoints];
+  if (closed) canvasRoutePoints.push(canvasRoutePoints[0]);
 
   ctx.save();
   ctx.lineJoin = 'round';
@@ -464,7 +465,7 @@ async function createRouteMapImageData(stops, width = 1000, height = 640) {
   ctx.restore();
 
   validStops.forEach(({ code }, index) => {
-    const [x, y] = canvasRoutePoints[index];
+    const [x, y] = markerPoints[index];
     drawCanvasMarker(ctx, x, y, code, index === 0);
   });
 
@@ -487,8 +488,8 @@ async function createRouteMapImageData(stops, width = 1000, height = 640) {
   }
 }
 
-async function createRouteMapJpeg(stops, width = 1000, height = 640) {
-  const imageData = await createRouteMapImageData(stops, width, height);
+async function createRouteMapJpeg(stops, width = 1000, height = 640, closed = true) {
+  const imageData = await createRouteMapImageData(stops, width, height, closed);
   if (!imageData?.dataUrl) return null;
 
   return {
@@ -498,7 +499,7 @@ async function createRouteMapJpeg(stops, width = 1000, height = 640) {
   };
 }
 
-function drawRouteSketch(pdf, stops, box) {
+function drawRouteSketch(pdf, stops, box, closed = true) {
   const validStops = stops.filter(({ airport }) => (
     Number.isFinite(airport?.lat) && Number.isFinite(airport?.lon)
   ));
@@ -535,7 +536,7 @@ function drawRouteSketch(pdf, stops, box) {
     Math.round(plot.y + ((airport.lat - minLat) / latSpan) * plot.height),
   ];
   const routePoints = validStops.map(({ airport }) => project(airport));
-  routePoints.push(routePoints[0]);
+  if (closed) routePoints.push(routePoints[0]);
   pdf.polyline(routePoints, { stroke: '37 99 235', lineWidth: 2.5 });
 
   validStops.forEach(({ code, label, airport }, index) => {
@@ -847,7 +848,87 @@ function buildColumnPlacements(sections, topY, left, right, bottomMargin = 42, g
   return placements;
 }
 
+// One-way (A -> B) report: a full-width route box that grows with the number of legs, the map, then the airport cards.
+function buildOneWayPdfBlob(report, routeMapImage) {
+  const pdf = makePdfBuilder();
+  const left = 42;
+  const right = 570;
+  const fullWidth = right - left;
+  const bottomMargin = 42;
+
+  pdf.text(left, 758, 'Cross Country Trip Summary', { font: 'F2', size: 22, color: '17 24 39' });
+  pdf.text(left, 742, GENERATED_BY_LINE, { size: 8, color: '100 116 139' });
+
+  const codeLines = wrapLine(report.routeCodes.join('  >  '), maxCharsForWidth(fullWidth - 24, 11));
+  const segments = report.distanceSegments;
+  const columns = segments.length > 6 ? 2 : 1;
+  const rows = Math.ceil(segments.length / columns);
+  const rowHeight = 15;
+  const boxTop = 722;
+  const boxHeight = 30 + (codeLines.length * 15) + 26 + 26 + (rows * rowHeight) + 34;
+  const boxBottom = boxTop - boxHeight;
+
+  pdf.rect(left, boxBottom, fullWidth, boxHeight, { fill: '239 246 255', stroke: '147 197 253' });
+  let cursorY = boxTop - 22;
+  pdf.text(left + 12, cursorY, 'ROUTE', { font: 'F2', size: 10, color: '30 64 175' });
+  cursorY -= 20;
+  codeLines.forEach((line) => {
+    pdf.text(left + 12, cursorY, line, { font: 'F2', size: 11, color: '37 99 235' });
+    cursorY -= 15;
+  });
+  cursorY -= 4;
+  pdf.text(left + 12, cursorY, `Total ${report.total.toFixed(1)} NM`, { font: 'F2', size: 11, color: '17 24 39' });
+  cursorY -= 24;
+  pdf.text(left + 12, cursorY, 'DISTANCES', { font: 'F2', size: 10, color: '30 64 175' });
+  cursorY -= 20;
+  const columnWidth = (fullWidth - 24) / columns;
+  segments.forEach((segment, index) => {
+    const column = Math.floor(index / rows);
+    const row = index % rows;
+    drawDistanceLine(
+      pdf,
+      segment.from,
+      segment.to,
+      `${segment.distance.toFixed(1)} NM`,
+      left + 12 + (column * columnWidth),
+      cursorY - (row * rowHeight),
+      { size: 9.5 }
+    );
+  });
+  pdf.text(left + 12, boxBottom + 14, 'Always review NOTAMs, weather, and current airport conditions before departure.', {
+    size: 7.8,
+    color: '100 116 139',
+  });
+
+  const mapHeight = 230;
+  let mapBottom = boxBottom - 16 - mapHeight;
+  if (mapBottom < bottomMargin) {
+    pdf.addPage();
+    mapBottom = 748 - mapHeight;
+  }
+  const mapBox = { x: left, y: mapBottom, width: fullWidth, height: mapHeight };
+  if (routeMapImage) {
+    pdf.rect(mapBox.x, mapBox.y, mapBox.width, mapBox.height, { fill: '239 246 255', stroke: '148 163 184' });
+    pdf.jpegImage(routeMapImage, mapBox.x + 8, mapBox.y + 8, mapBox.width - 16, mapBox.height - 16);
+  } else {
+    drawRouteSketch(pdf, report.airportSections, mapBox, false);
+  }
+
+  let cardTop = mapBottom - 16;
+  report.airportSections.forEach((section) => {
+    const cardHeight = measureAirportCard(section, fullWidth, false);
+    if (cardTop - cardHeight < bottomMargin) {
+      pdf.addPage();
+      cardTop = 748;
+    }
+    cardTop = drawAirportCard(pdf, section, left, cardTop, fullWidth, false) - 16;
+  });
+
+  return pdf.finalize();
+}
+
 function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
+  if (report.oneWay) return buildOneWayPdfBlob(report, routeMapImage);
   const pdf = makePdfBuilder();
   const left = 42;
   const right = 570;
@@ -1097,7 +1178,9 @@ export default function SummaryModal({
   firstLegCode,
   secondLegCode,
   tripType,
+  oneWayCodes = [],
 }) {
+  const oneWay = tripType === 'oneway';
   const [reportMode, setReportMode] = useState('pdf');
   const [pdfBlob, setPdfBlob] = useState(null);
   const [pdfUrl, setPdfUrl] = useState('');
@@ -1129,7 +1212,7 @@ export default function SummaryModal({
       setRouteMapPreviewUrl('');
     }
     resetGeneratedPdf();
-  }, [open, homeCode, firstLegCode, secondLegCode]);
+  }, [open, homeCode, firstLegCode, secondLegCode, oneWayCodes.join('|')]);
 
   useEffect(() => () => {
     if (pdfUrl) {
@@ -1158,30 +1241,48 @@ export default function SummaryModal({
   useEffect(() => {
     if (!open) return;
 
+    if (oneWay) {
+      if (oneWayCodes.length > 0) loadAirportDetails?.(oneWayCodes);
+      return;
+    }
     const codes = [homeCode, firstLegCode];
     if (tripType === 'two' && secondLegCode) {
       codes.push(secondLegCode);
     }
     loadAirportDetails?.(codes);
-  }, [open, homeCode, firstLegCode, secondLegCode, tripType, loadAirportDetails]);
+  }, [open, homeCode, firstLegCode, secondLegCode, tripType, oneWay, oneWayCodes.join('|'), loadAirportDetails]);
 
   const home = airportData[homeCode];
-  const first = airportData[firstLegCode];
-  const second = secondLegCode ? airportData[secondLegCode] : null;
-  const hasRequiredSelection = Boolean(open && homeCode && firstLegCode);
-  const hasRequiredAirports = Boolean(home && first);
-  const detailsReady = Boolean(
-    hasRequiredAirports &&
-    home.detailsLoaded &&
-    first.detailsLoaded &&
-    !(tripType === 'two' && secondLegCode && !second?.detailsLoaded)
-  );
+  const first = oneWay ? airportData[oneWayCodes[1]] : airportData[firstLegCode];
+  const second = !oneWay && secondLegCode ? airportData[secondLegCode] : null;
+  const oneWayAirports = oneWay ? oneWayCodes.map((code) => airportData[code]) : [];
+  const hasRequiredSelection = oneWay
+    ? Boolean(open && oneWayCodes.length >= 2)
+    : Boolean(open && homeCode && firstLegCode);
+  const hasRequiredAirports = oneWay
+    ? oneWayAirports.length >= 2 && oneWayAirports.every(Boolean)
+    : Boolean(home && first);
+  const detailsReady = oneWay
+    ? Boolean(hasRequiredAirports && oneWayAirports.every((airport) => airport.detailsLoaded))
+    : Boolean(
+      hasRequiredAirports &&
+      home.detailsLoaded &&
+      first.detailsLoaded &&
+      !(tripType === 'two' && secondLegCode && !second?.detailsLoaded)
+    );
+  const oneWayLabel = (index) => {
+    if (index === 0) return 'Departure (A)';
+    if (index === oneWayCodes.length - 1) return 'Destination (B)';
+    return `Stop ${index}`;
+  };
   const previewAirportSections = detailsReady
-    ? [
-        { label: 'Home Base', code: homeCode, airport: home },
-        { label: 'First Destination', code: firstLegCode, airport: first },
-        second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
-      ].filter(Boolean)
+    ? (oneWay
+      ? oneWayCodes.map((code, index) => ({ label: oneWayLabel(index), code, airport: airportData[code] }))
+      : [
+          { label: 'Home Base', code: homeCode, airport: home },
+          { label: 'First Destination', code: firstLegCode, airport: first },
+          second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
+        ].filter(Boolean))
     : [];
   const previewRouteKey = previewAirportSections
     .map((section) => `${section.label}:${section.code}`)
@@ -1196,7 +1297,7 @@ export default function SummaryModal({
     let active = true;
 
     (async () => {
-      const imageData = await createRouteMapImageData(previewAirportSections);
+      const imageData = await createRouteMapImageData(previewAirportSections, undefined, undefined, !oneWay);
       if (active) {
         setRouteMapPreviewUrl(imageData?.dataUrl || '');
       }
@@ -1205,7 +1306,7 @@ export default function SummaryModal({
     return () => {
       active = false;
     };
-  }, [open, reportMode, detailsReady, previewRouteKey]);
+  }, [open, reportMode, detailsReady, previewRouteKey, oneWay]);
 
   if (!hasRequiredSelection) return null;
   if (!hasRequiredAirports) return null;
@@ -1225,28 +1326,41 @@ export default function SummaryModal({
     );
   }
 
-  const leg1 = hasRequiredAirports ? haversine(home.lat, home.lon, first.lat, first.lon) : 0;
-  const leg2 = hasRequiredAirports && second ? haversine(first.lat, first.lon, second.lat, second.lon) : 0;
-  const leg3 = hasRequiredAirports ? (second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1) : 0;
-  const total = second ? leg1 + leg2 + leg3 : leg1 * 2;
+  const leg1 = !oneWay && hasRequiredAirports ? haversine(home.lat, home.lon, first.lat, first.lon) : 0;
+  const leg2 = !oneWay && hasRequiredAirports && second ? haversine(first.lat, first.lon, second.lat, second.lon) : 0;
+  const leg3 = !oneWay && hasRequiredAirports ? (second ? haversine(second.lat, second.lon, home.lat, home.lon) : leg1) : 0;
 
-  const airportSections = [
-    { label: 'Home Base', code: homeCode, airport: home },
-    { label: 'First Destination', code: firstLegCode, airport: first },
-    second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
-  ].filter(Boolean);
+  const airportSections = oneWay
+    ? previewAirportSections
+    : [
+        { label: 'Home Base', code: homeCode, airport: home },
+        { label: 'First Destination', code: firstLegCode, airport: first },
+        second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
+      ].filter(Boolean);
 
-  const distanceLines = [
-    `${homeCode} -> ${firstLegCode}: ${leg1.toFixed(1)} NM`,
-    tripType === 'two' && secondLegCode
-      ? `${firstLegCode} -> ${secondLegCode}: ${leg2.toFixed(1)} NM`
-      : `${firstLegCode} -> ${homeCode}: ${leg1.toFixed(1)} NM`,
-    tripType === 'two' && secondLegCode
-      ? `${secondLegCode} -> ${homeCode}: ${leg3.toFixed(1)} NM`
-      : null,
-  ].filter(Boolean);
+  const distanceSegments = oneWay
+    ? oneWayCodes.slice(1).map((code, index) => {
+        const from = airportData[oneWayCodes[index]];
+        const to = airportData[code];
+        return { from: oneWayCodes[index], to: code, distance: haversine(from.lat, from.lon, to.lat, to.lon) };
+      })
+    : [
+        { from: homeCode, to: firstLegCode, distance: leg1 },
+        tripType === 'two' && secondLegCode
+          ? { from: firstLegCode, to: secondLegCode, distance: leg2 }
+          : { from: firstLegCode, to: homeCode, distance: leg1 },
+        tripType === 'two' && secondLegCode
+          ? { from: secondLegCode, to: homeCode, distance: leg3 }
+          : null,
+      ].filter(Boolean);
+  const total = oneWay
+    ? distanceSegments.reduce((sum, segment) => sum + segment.distance, 0)
+    : (second ? leg1 + leg2 + leg3 : leg1 * 2);
+  const distanceLines = distanceSegments.map(
+    (segment) => `${segment.from} -> ${segment.to}: ${segment.distance.toFixed(1)} NM`
+  );
 
-  const routeCodes = [...airportSections.map(({ code }) => code), homeCode];
+  const routeCodes = oneWay ? [...oneWayCodes] : [...airportSections.map(({ code }) => code), homeCode];
   const routeName = routeCodes.join(' -> ');
   const routeDisplay = routeCodes.join(' → ');
 
@@ -1275,17 +1389,10 @@ export default function SummaryModal({
     airportSections,
     routeCodes,
     distanceLines,
-    distanceSegments: [
-      { from: homeCode, to: firstLegCode, distance: leg1 },
-      tripType === 'two' && secondLegCode
-        ? { from: firstLegCode, to: secondLegCode, distance: leg2 }
-        : { from: firstLegCode, to: homeCode, distance: leg1 },
-      tripType === 'two' && secondLegCode
-        ? { from: secondLegCode, to: homeCode, distance: leg3 }
-        : null,
-    ].filter(Boolean),
+    distanceSegments,
     routeName,
     total,
+    oneWay,
   };
   const approachOptions = airportSections.flatMap((section) => {
     const diagram = section.airport.diagram?.pdf_url
@@ -1339,7 +1446,7 @@ export default function SummaryModal({
     );
 
     try {
-      const routeMapImage = await createRouteMapJpeg(summaryReport.airportSections);
+      const routeMapImage = await createRouteMapJpeg(summaryReport.airportSections, undefined, undefined, !oneWay);
       const summaryBlob = buildGraphicalSummaryPdfBlob(summaryReport, routeMapImage);
       const { blob, failedApproaches } = await mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches);
       const nextPdfUrl = URL.createObjectURL(blob);

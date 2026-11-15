@@ -70,7 +70,7 @@ function getApproachSummary(airport) {
   return deriveApproachSummaryFromApproaches(Array.isArray(airport.approaches) ? airport.approaches : []);
 }
 
-function airportMatchesFilters(airport, filters) {
+export function airportMatchesFilters(airport, filters) {
   if (filters.excludeNonPublic && airport.access && airport.access !== 'pub') return false;
   if (!filters.airspaces.includes(airport.airspace)) return false;
   if (airport.elevation > filters.maxAirportElev) return false;
@@ -236,4 +236,156 @@ export function sortResults(results, sortBy, type) {
     return aVal - bVal;
   });
   return copy;
+}
+
+// ---------- One-way (A -> B) planning ----------
+// The destination B is chosen first. Then the route is built one leg at a time: each leg has its own min/max distance
+// (legs[i] ends at stop i; the last entry is the leg being defined, which ends at the next stop or at B).
+
+function distanceBetween(airportData, codeA, codeB) {
+  const a = airportData[codeA];
+  const b = airportData[codeB];
+  if (!a || !b) return null;
+  return haversine(a.lat, a.lon, b.lat, b.lon);
+}
+
+// Next-stop candidates: pass the filters, lie inside the leg's min/max from the current point, and are closer to B
+// than the current point is (every stop must make progress toward the destination).
+export function findOneWayStopCandidates(airportData, { originCode, destCode, leg, filters, excludeCodes = [] }) {
+  const origin = airportData[originCode];
+  const dest = airportData[destCode];
+  if (!origin || !dest || !leg) return [];
+  const remaining = haversine(origin.lat, origin.lon, dest.lat, dest.lon);
+  const excluded = new Set([originCode, destCode, ...excludeCodes]);
+
+  const results = [];
+  Object.entries(airportData).forEach(([code, airport]) => {
+    if (excluded.has(code)) return;
+    if (!airportMatchesFilters(airport, filters)) return;
+    const distance = haversine(origin.lat, origin.lon, airport.lat, airport.lon);
+    if (distance < leg.min || distance > leg.max) return;
+    const toDest = haversine(airport.lat, airport.lon, dest.lat, dest.lon);
+    if (toDest >= remaining) return;
+
+    results.push({
+      code,
+      name: airport.airport_name,
+      city: airport.city,
+      state: airport.state,
+      airspace: airport.airspace,
+      elevation: airport.elevation,
+      fuel: airport.fuel,
+      lat: airport.lat,
+      lon: airport.lon,
+      distance,
+      toDest,
+    });
+  });
+
+  results.sort((a, b) => {
+    if (filters.sortBy === 'alphabetical') return a.code.localeCompare(b.code);
+    if (filters.sortBy === 'total_distance') return a.toDest - b.toDest;
+    return a.distance - b.distance;
+  });
+  return results;
+}
+
+// B can be the end of the current leg when its distance from the current point is inside the leg's min/max.
+export function oneWayFinishInfo(airportData, originCode, destCode, leg) {
+  const distance = distanceBetween(airportData, originCode, destCode);
+  if (distance === null || !leg) return { distance: distance ?? 0, canFinish: false };
+  return { distance, canFinish: distance >= leg.min && distance <= leg.max };
+}
+
+// Longest valid part of the chosen route: every stop must pass the filters and lie inside its leg's min/max,
+// and a finished route needs B inside the final leg's min/max.
+export function validateOneWayRoute(airportData, homeCode, destCode, legs, stops, finished, filters) {
+  const valid = [];
+  let previous = homeCode;
+  for (let index = 0; index < stops.length; index += 1) {
+    const code = stops[index];
+    const airport = airportData[code];
+    const leg = legs[index];
+    if (!airport || !leg || code === homeCode || code === destCode || valid.includes(code)) break;
+    if (!airportMatchesFilters(airport, filters)) break;
+    const distance = distanceBetween(airportData, previous, code);
+    if (distance === null || distance < leg.min || distance > leg.max) break;
+    valid.push(code);
+    previous = code;
+  }
+
+  const allStopsValid = valid.length === stops.length;
+  const finalLeg = legs[valid.length];
+  const stillFinished = Boolean(
+    finished && allStopsValid && finalLeg && oneWayFinishInfo(airportData, previous, destCode, finalLeg).canFinish
+  );
+  return { stops: valid, finished: stillFinished };
+}
+
+// Per-leg distances of the route chosen so far (the last leg, to B, appears once the route is finished).
+export function buildOneWaySegments(airportData, homeCode, destCode, legs, stops, finished) {
+  const points = [homeCode, ...stops];
+  const targets = finished ? [...stops, destCode] : stops;
+  const segments = [];
+
+  targets.forEach((to, index) => {
+    const from = points[index];
+    const distance = distanceBetween(airportData, from, to);
+    const leg = legs[index];
+    if (distance === null || !leg) return;
+    segments.push({
+      from,
+      to,
+      distance,
+      min: leg.min,
+      max: leg.max,
+      ok: distance >= leg.min && distance <= leg.max,
+    });
+  });
+
+  return {
+    segments,
+    complete: Boolean(finished),
+    total: segments.reduce((sum, segment) => sum + segment.distance, 0),
+    allOk: Boolean(finished) && segments.every((segment) => segment.ok),
+  };
+}
+
+// Why nothing can be chosen next (used when there are no candidates and B is not reachable yet).
+export function describeOneWayStuck(airportData, originCode, destCode, leg) {
+  const distance = distanceBetween(airportData, originCode, destCode);
+  if (distance === null || !leg) return '';
+  if (distance < leg.min) {
+    return `${destCode} is only ${distance.toFixed(0)} NM from ${originCode}, less than this leg's minimum of ${leg.min} NM. Lower the minimum to finish at ${destCode}.`;
+  }
+  return `${destCode} is ${distance.toFixed(0)} NM from ${originCode}, but no airport ${leg.min}–${leg.max} NM away is closer to ${destCode} with the current filters. Raise the maximum, lower the minimum, or relax the filters.`;
+}
+
+// Airports that can be chosen as the destination (B) when picking it on the map: filters + a min/max distance from the home base.
+export function findDestinationCandidates(airportData, homeCode, range, filters) {
+  const home = airportData[homeCode];
+  if (!home) return [];
+
+  const results = [];
+  Object.entries(airportData).forEach(([code, airport]) => {
+    if (code === homeCode) return;
+    if (!airportMatchesFilters(airport, filters)) return;
+    const distance = haversine(home.lat, home.lon, airport.lat, airport.lon);
+    if (distance < range.min || distance > range.max) return;
+    results.push({
+      code,
+      name: airport.airport_name,
+      city: airport.city,
+      state: airport.state,
+      airspace: airport.airspace,
+      elevation: airport.elevation,
+      fuel: airport.fuel,
+      lat: airport.lat,
+      lon: airport.lon,
+      distance,
+    });
+  });
+
+  results.sort((a, b) => (filters.sortBy === 'alphabetical' ? a.code.localeCompare(b.code) : a.distance - b.distance));
+  return results;
 }
