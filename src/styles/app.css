@@ -285,8 +285,9 @@ input[type='number'] {
   display: flex;
   align-items: center;
   gap: .5rem;
-  min-height: 38px;
-  padding: .48rem .72rem;
+  margin-bottom: 0;      /* the global label margin made the chip rows far apart */
+  min-height: 34px;
+  padding: .36rem .72rem;
   border: 1px solid #d5deea;
   border-radius: 12px;
   background: #f8fafc;
@@ -301,11 +302,11 @@ summary {
   margin-bottom: .45rem;
 }
 
-details { margin-bottom: .65rem; }
+details { margin-bottom: .5rem; }
 
 .stack-row {
   display: grid;
-  gap: .8rem;
+  gap: .55rem;
 }
 
 .toggle-line {
@@ -316,7 +317,7 @@ details { margin-bottom: .65rem; }
 }
 
 .filter-toggle-top {
-  margin-bottom: .85rem;
+  margin-bottom: .5rem;
 }
 
 .segmented {
