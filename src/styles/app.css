@@ -1462,3 +1462,32 @@ details { margin-bottom: .65rem; }
   font-size: .8rem;
   font-weight: 400;
 }
+
+.oneway-leg-label {
+  text-align: center;
+  line-height: 1.25;
+}
+
+.oneway-leg-mc {
+  font-weight: 800;
+}
+
+.oneway-leg-mc.mc-east {
+  color: #15803d;
+}
+
+.oneway-leg-mc.mc-west {
+  color: #dc2626;
+}
+
+.airspace-legend-swatch.mc-east-swatch {
+  background: #15803d;
+}
+
+.airspace-legend-swatch.mc-west-swatch {
+  background: #dc2626;
+}
+
+.result-card-note.muted {
+  color: #94a3b8;
+}

@@ -149,7 +149,7 @@ export default function ResultsSection({
               Stop {activeIndex + 1} Candidates
             </h2>
             <p className="oneway-hint">
-              {leg.min}–{leg.max} NM from {originCode}, closer to {destCode} than {originCode} is.
+              All airports {leg.min}–{leg.max} NM from {originCode} that pass the filters.
             </p>
             <div className="results-stack">
               {oneWay.finishInfo?.canFinish && (
@@ -188,6 +188,7 @@ export default function ResultsSection({
                       {result.toDest >= leg.min && result.toDest <= leg.max && (
                         <div className="result-card-note">{destCode} is reachable with the next leg ✓</div>
                       )}
+                      {!result.closer && <div className="result-card-note muted">Farther from {destCode} than {originCode}</div>}
                     </ResultCard>
                   );
                 })

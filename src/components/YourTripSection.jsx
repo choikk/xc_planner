@@ -156,8 +156,7 @@ function OneWayPlanner({ oneWay }) {
           <h3>Route</h3>
           <p className="oneway-hint">
             Build the route one leg at a time from {homeCode} toward {destCode}. For each leg, set its minimum and maximum
-            distance, then click an airport on the map (or in Results). The dots shown fit the leg and are closer to{' '}
-            {destCode} than where you are now. When {destCode} falls inside the leg&apos;s range, finish the route there.
+            distance, then click an airport on the map (or in Results). Every airport inside the range is shown. When {destCode} falls inside the leg&apos;s range, finish the route there.
           </p>
 
           <div className="oneway-point oneway-point-a">

@@ -14,7 +14,7 @@ import {
   useMapEvents,
 } from 'react-leaflet';
 import L from 'leaflet';
-import { computeEllipsePoints, formatSurface, getAirspaceColor, haversine } from '../utils/geo';
+import { computeEllipsePoints, formatCourse, formatSurface, getAirspaceColor, haversine, legCourse } from '../utils/geo';
 import { formatDecommissionedNote } from '../utils/decommissioned';
 import { useAopaDiagramUrl } from '../utils/aopa';
 
@@ -112,13 +112,25 @@ function stopNumberDivIcon(number) {
   });
 }
 
-function legLabelDivIcon(text) {
+// Distance on the first line, magnetic course on the second: green for 000-179 (eastbound), red for 180-359 (westbound).
+function legLabelDivIcon(text, magneticCourse) {
+  const course = Number.isFinite(magneticCourse) ? Math.round(magneticCourse) % 360 : null;
+  const courseLine = course === null
+    ? ''
+    : `<div class="oneway-leg-mc ${course < 180 ? 'mc-east' : 'mc-west'}">MC ${escapeHtml(formatCourse(magneticCourse))}\u00B0</div>`;
   return L.divIcon({
     className: 'oneway-leg-label-wrapper',
-    html: `<div class="oneway-leg-label">${escapeHtml(text)}</div>`,
+    html: `<div class="oneway-leg-label"><div>${escapeHtml(text)}</div>${courseLine}</div>`,
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
+}
+
+// " · MC 226°" for a leg between two airports (magnetic course at the middle of the leg), or '' when unknown.
+function mcSuffix(from, to) {
+  if (!from || !to || !isFiniteCoord(from.lat, from.lon) || !isFiniteCoord(to.lat, to.lon)) return '';
+  const { magnetic } = legCourse(from.lat, from.lon, to.lat, to.lon);
+  return Number.isFinite(magnetic) ? ` · MC ${formatCourse(magnetic)}\u00B0` : '';
 }
 
 function isFiniteCoord(lat, lon) {
@@ -538,6 +550,22 @@ export default function MapView({
               <span className="airspace-legend-swatch outer-sample" />
               <span>Filtered out / Max + 100 NM</span>
             </div>
+            {oneWayActive && (
+              <>
+                <div className="airspace-legend-row">
+                  <span className="airspace-legend-swatch mc-east-swatch" />
+                  <span>MC 000–179°: odd thousands + 500 ft</span>
+                </div>
+                <div className="airspace-legend-row">
+                  <span className="airspace-legend-swatch mc-west-swatch" />
+                  <span>MC 180–359°: even thousands + 500 ft</span>
+                </div>
+                <div className="airspace-legend-row muted">
+                  <span className="airspace-legend-swatch" style={{ background: 'transparent', border: 'none' }} />
+                  <span>VFR cruising altitude (14 CFR 91.159), above 3,000 ft AGL</span>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -716,13 +744,14 @@ export default function MapView({
         >
           {infoPopup.type === 'first'
             ? renderAirportPopupContent(visibleInfoAirport, [
-                `Distance: ${visibleInfoPopup.distance.toFixed(1)} NM`,
+                `Distance: ${visibleInfoPopup.distance.toFixed(1)} NM${mcSuffix(homeAirport, visibleInfoAirport)}`,
+                `Return: ${visibleInfoPopup.distance.toFixed(1)} NM${mcSuffix(visibleInfoAirport, homeAirport)}`,
                 `Total: ${(visibleInfoPopup.distance * 2).toFixed(1)} NM`,
               ])
             : renderAirportPopupContent(visibleInfoAirport, [
-                `1st Leg: ${firstLegDistance?.toFixed(1) || '0.0'} NM`,
-                `2nd Leg: ${visibleInfoPopup.leg2Distance.toFixed(1)} NM`,
-                `Return: ${visibleInfoPopup.leg3Distance.toFixed(1)} NM`,
+                `1st Leg: ${firstLegDistance?.toFixed(1) || '0.0'} NM${mcSuffix(homeAirport, firstSelectedAirport)}`,
+                `2nd Leg: ${visibleInfoPopup.leg2Distance.toFixed(1)} NM${mcSuffix(firstSelectedAirport, visibleInfoAirport)}`,
+                `Return: ${visibleInfoPopup.leg3Distance.toFixed(1)} NM${mcSuffix(visibleInfoAirport, homeAirport)}`,
                 `Total: ${visibleInfoPopup.totalDistance.toFixed(1)} NM`,
               ])}
           <PopupSummaryButton
@@ -900,7 +929,7 @@ export default function MapView({
                   </Tooltip>
                 )}
                 <Popup minWidth={290} maxWidth={480}>
-                  {renderAirportPopupContent(airport, [`Distance from ${homeAirport?.airport_code || 'A'}: ${result.distance.toFixed(1)} NM`])}
+                  {renderAirportPopupContent(airport, [`Distance from ${homeAirport?.airport_code || 'A'}: ${result.distance.toFixed(1)} NM${mcSuffix(homeAirport, airport)}`])}
                   <button
                     type="button"
                     className="popup-summary-btn"
@@ -932,11 +961,12 @@ export default function MapView({
           {oneWaySolidPath.slice(1).map((point, index) => {
             const from = oneWaySolidPath[index];
             const distance = haversine(from.lat, from.lon, point.lat, point.lon);
+            const { magnetic } = legCourse(from.lat, from.lon, point.lat, point.lon);
             return (
               <Marker
                 key={`label-${from.code}-${point.code}`}
                 position={[(from.lat + point.lat) / 2, (from.lon + point.lon) / 2]}
-                icon={legLabelDivIcon(`${distance.toFixed(1)} NM`)}
+                icon={legLabelDivIcon(`${distance.toFixed(1)} NM`, magnetic)}
                 interactive={false}
               />
             );
@@ -956,7 +986,7 @@ export default function MapView({
                 {renderAirportPopupContent(oneWayDest, [
                   'Destination',
                   ...(oneWay.slotOpen && oneWay.finishInfo
-                    ? [`From here: ${oneWay.finishInfo.distance.toFixed(1)} NM`]
+                    ? [`From here: ${oneWay.finishInfo.distance.toFixed(1)} NM${mcSuffix(oneWayOrigin, oneWayDest)}`]
                     : []),
                 ])}
                 {oneWay.slotOpen && oneWay.finishInfo?.canFinish && (
@@ -996,8 +1026,8 @@ export default function MapView({
                 )}
                 <Popup minWidth={290} maxWidth={480}>
                   {renderAirportPopupContent(airport, [
-                    `Leg ${oneWay.activeIndex + 1}: ${result.distance.toFixed(1)} NM`,
-                    `To ${oneWayDest?.airport_code || 'B'}: ${result.toDest.toFixed(1)} NM`,
+                    `Leg ${oneWay.activeIndex + 1}: ${result.distance.toFixed(1)} NM${mcSuffix(oneWayOrigin, airport)}`,
+                    `To ${oneWayDest?.airport_code || 'B'}: ${result.toDest.toFixed(1)} NM${result.closer ? '' : ' (farther than now)'}`,
                   ])}
                   <button
                     type="button"

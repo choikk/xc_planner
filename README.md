@@ -19,7 +19,7 @@ XC Planner v2 is a React/Vite cross-country flight planning app for U.S. general
 Under Plan > Your Trip, the **A → B** mode plans a one-way route from the home base to a destination, with no return leg. The route is built in order:
 
 1. **Choose the destination first.** The Origin card shows the home base. Set a minimum and maximum distance from it and click one of the airports that fit on the map (or in Results), then choose **Set as Destination**.
-2. **Set the distance range of the next leg** (minimum and maximum NM), then click an airport on the map (or in Results). The dots shown pass the filters, lie inside the leg's range, and are closer to B than where you are now. Results marks candidates from which B is reachable with the next leg.
+2. **Set the distance range of the next leg** (minimum and maximum NM), then click an airport on the map (or in Results). Every airport that passes the filters and lies inside the leg's range is drawn on the map and can be chosen. Results marks candidates from which B is reachable with the next leg and notes the ones that are farther from B than where you are now.
 3. **Repeat for each leg.** Every leg has its own range (a new leg starts with the previous leg's limits), and you can add as many stops as you need.
 4. **Finish adding stops** once B falls inside the current leg's range (button in the Plan tab, Results, or B's map popup); the last leg then goes straight to B.
 - Changing a leg range, the filters, the home base, or the destination drops any stop that no longer fits. **Clear** removes a stop and everything after it.

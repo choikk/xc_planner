@@ -249,8 +249,8 @@ function distanceBetween(airportData, codeA, codeB) {
   return haversine(a.lat, a.lon, b.lat, b.lon);
 }
 
-// Next-stop candidates: pass the filters, lie inside the leg's min/max from the current point, and are closer to B
-// than the current point is (every stop must make progress toward the destination).
+// Next-stop candidates: every airport that passes the filters and lies inside the leg's min/max from the current point.
+// `closer` marks the ones that bring the route nearer to B (the others stay selectable but are drawn faded).
 export function findOneWayStopCandidates(airportData, { originCode, destCode, leg, filters, excludeCodes = [] }) {
   const origin = airportData[originCode];
   const dest = airportData[destCode];
@@ -265,7 +265,6 @@ export function findOneWayStopCandidates(airportData, { originCode, destCode, le
     const distance = haversine(origin.lat, origin.lon, airport.lat, airport.lon);
     if (distance < leg.min || distance > leg.max) return;
     const toDest = haversine(airport.lat, airport.lon, dest.lat, dest.lon);
-    if (toDest >= remaining) return;
 
     results.push({
       code,
@@ -279,6 +278,7 @@ export function findOneWayStopCandidates(airportData, { originCode, destCode, le
       lon: airport.lon,
       distance,
       toDest,
+      closer: toDest < remaining,
     });
   });
 
@@ -362,7 +362,7 @@ export function describeOneWayStuck(airportData, originCode, destCode, leg) {
   if (distance < leg.min) {
     return `${destCode} is only ${distance.toFixed(0)} NM from ${originCode}, less than this leg's minimum of ${leg.min} NM. Lower the minimum to finish at ${destCode}.`;
   }
-  return `${destCode} is ${distance.toFixed(0)} NM from ${originCode}, but no airport ${leg.min}–${leg.max} NM away is closer to ${destCode} with the current filters. Raise the maximum, lower the minimum, or relax the filters.`;
+  return `${destCode} is ${distance.toFixed(0)} NM from ${originCode}, but no airport ${leg.min}–${leg.max} NM away passes the current filters. Raise the maximum, lower the minimum, or relax the filters.`;
 }
 
 // Airports that can be chosen as the destination when picking it on the map: filters + a min/max distance from the home base.
