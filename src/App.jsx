@@ -154,7 +154,7 @@ export default function App() {
   }, [oneWaySlotOpen, oneWayFinish, oneWayCandidates, airportData, oneWayOriginCode, destCode, oneWayLeg]);
   const oneWayRoute = useMemo(() => {
     if (!isOneWay || !destAirport || !selectedAirport) {
-      return { segments: [], complete: false, total: 0, allOk: false };
+      return { segments: [], complete: false, direct: 0, total: 0, allOk: false };
     }
     return buildOneWaySegments(airportData, selectedAirportCode, destCode, oneWayLegs, effectiveStops, oneWayDone);
   }, [isOneWay, airportData, selectedAirportCode, selectedAirport, destCode, destAirport, oneWayLegs, effectiveStops, oneWayDone]);

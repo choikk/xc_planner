@@ -24,6 +24,13 @@ function LegLimitInputs({ leg, index, onChange }) {
   );
 }
 
+// How much longer the chosen route is than the straight line, e.g. "+0.2%".
+function formatDetour(route) {
+  if (!(route.direct > 0)) return '';
+  const percent = ((route.total / route.direct) - 1) * 100;
+  return `${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%`;
+}
+
 function OneWayPlanner({ oneWay }) {
   const {
     legs,
@@ -61,7 +68,7 @@ function OneWayPlanner({ oneWay }) {
         <LegLimitInputs leg={legs[index]} index={index} onChange={onLegChange} />
         {segment && (
           <div className={`oneway-leg-result ${segment.ok ? 'ok' : 'bad'}`}>
-            {segment.from} → {segment.to}: {segment.distance.toFixed(1)} NM
+            {segment.from} → {segment.to}: {segment.distance.toFixed(1)} NM{segment.mc ? ` · MC ${segment.mc}°` : ''}
             {segment.ok ? ' ✓' : ` (limit ${segment.min}–${segment.max} NM)`}
           </div>
         )}
@@ -129,6 +136,9 @@ function OneWayPlanner({ oneWay }) {
             <strong>{destCode}</strong> – {destAirport.airport_name}
             <div>
               {destAirport.city}, {destAirport.state === 'unknown' ? 'N/A' : destAirport.state}
+            </div>
+            <div>
+              Direct distance {homeCode} → {destCode}: {route.direct.toFixed(1)} NM
             </div>
             <button type="button" className="oneway-link" onClick={onClearDest}>
               Change destination
@@ -207,7 +217,7 @@ function OneWayPlanner({ oneWay }) {
 
           <div className={`oneway-total${route.complete ? (route.allOk ? ' ok' : ' bad') : ''}`}>
             {route.complete
-              ? `Total ${route.total.toFixed(1)} NM · ${route.allOk ? 'route ready for Summary Report' : 'a leg is outside its limits'}`
+              ? `Route ${route.total.toFixed(1)} NM · Direct ${route.direct.toFixed(1)} NM (${formatDetour(route)}) · ${route.allOk ? 'ready for Summary Report' : 'a leg is outside its limits'}`
               : `${stops.length} stop${stops.length === 1 ? '' : 's'} chosen · ${finishInfo.distance.toFixed(1)} NM to ${destCode}`}
           </div>
         </div>
@@ -302,9 +312,11 @@ export default function YourTripSection({ filters, setFilters, onMapReset, hasMa
         </div>
       )}
 
-      <button type="button" className="secondary-btn full-width-btn" onClick={onMapReset} disabled={!hasMapSelection}>
-        {isOneWay ? 'Clear Stops' : 'Map Reset'}
-      </button>
+      {!isOneWay && (
+        <button type="button" className="secondary-btn full-width-btn" onClick={onMapReset} disabled={!hasMapSelection}>
+          Map Reset
+        </button>
+      )}
     </section>
   );
 }

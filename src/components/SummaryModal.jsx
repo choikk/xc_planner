@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { useEffect, useState } from 'react';
-import { haversine, formatSurface } from '../utils/geo';
+import { haversine, formatSurface, legCourse, formatCourse } from '../utils/geo';
 import { formatDecommissionedNote } from '../utils/decommissioned';
 import { aopaDiagramExists, aopaDiagramUrl } from '../utils/aopa';
 
@@ -82,12 +82,13 @@ async function appendDiagramImagePage(summaryDoc, imageBuffer, approach) {
   const image = await summaryDoc.embedPng(pngBytes);
   const font = await summaryDoc.embedFont(StandardFonts.Helvetica);
   const page = summaryDoc.addPage([612, 792]);
+  // Draw the AOPA image at its original size (1 pixel = 1 point); it is only shrunk if it ever exceeds the page.
   const maxWidth = 520;
   const maxHeight = 600;
-  const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
   const width = image.width * scale;
   const height = image.height * scale;
-  const x = (612 - width) / 2;
+  const x = 46;
   const y = 792 - 110 - height;
 
   page.drawText(`${approach.airportCode} Airport Diagram`, { x: 46, y: 740, size: 16, font, color: rgb(0.07, 0.09, 0.15) });
@@ -153,13 +154,18 @@ async function mergeSummaryWithApproachPlates(summaryBlob, selectedApproaches) {
   };
 }
 
+// The degree sign is kept (the standard fonts below get a /degree glyph at code 176); everything else outside ASCII becomes "?".
+const PDF_DEGREE_MARK = '\u0001';
+
 function escapePdfText(value) {
   return String(value)
+    .replace(/\u00B0/g, PDF_DEGREE_MARK)
     .normalize('NFKD')
-    .replace(/[^\x20-\x7E]/g, '?')
+    .replace(/[^\x20-\x7E\u0001]/g, '?')
     .replace(/\\/g, '\\\\')
     .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)');
+    .replace(/\)/g, '\\)')
+    .replace(/\u0001/g, '\\260');
 }
 
 function escapePdfUrl(value) {
@@ -203,9 +209,9 @@ function makePdfBuilder() {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /Type /Encoding /BaseEncoding /StandardEncoding /Differences [176 /degree] >> >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding << /Type /Encoding /BaseEncoding /StandardEncoding /Differences [176 /degree] >> >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding << /Type /Encoding /BaseEncoding /StandardEncoding /Differences [176 /degree] >> >>',
   ];
   const pages = [];
   let page = null;
@@ -921,9 +927,14 @@ function buildOneWayPdfBlob(report, routeMapImage) {
     cursorY -= 15;
   });
   cursorY -= 4;
-  pdf.text(left + 12, cursorY, `Total ${report.total.toFixed(1)} NM`, { font: 'F2', size: 11, color: '17 24 39' });
+  pdf.text(
+    left + 12,
+    cursorY,
+    `Total ${report.total.toFixed(1)} NM    Direct ${report.direct.toFixed(1)} NM`,
+    { font: 'F2', size: 11, color: '17 24 39' }
+  );
   cursorY -= 24;
-  pdf.text(left + 12, cursorY, 'DISTANCES', { font: 'F2', size: 10, color: '30 64 175' });
+  pdf.text(left + 12, cursorY, 'DISTANCES  (MC = magnetic course)', { font: 'F2', size: 10, color: '30 64 175' });
   cursorY -= 20;
   const columnWidth = (fullWidth - 24) / columns;
   segments.forEach((segment, index) => {
@@ -933,7 +944,7 @@ function buildOneWayPdfBlob(report, routeMapImage) {
       pdf,
       segment.from,
       segment.to,
-      `${segment.distance.toFixed(1)} NM`,
+      `${segment.distance.toFixed(1)} NM${segment.mc ? `  MC ${segment.mc}\u00B0` : ''}`,
       left + 12 + (column * columnWidth),
       cursorY - (row * rowHeight),
       { size: 9.5 }
@@ -944,7 +955,11 @@ function buildOneWayPdfBlob(report, routeMapImage) {
     color: '100 116 139',
   });
 
-  const mapHeight = 230;
+  // Keep the map image's own aspect ratio (never stretch it): its width fills the page, its height follows from the image.
+  const mapInnerWidth = fullWidth - 16;
+  const mapHeight = routeMapImage?.pixelWidth && routeMapImage?.pixelHeight
+    ? (mapInnerWidth * routeMapImage.pixelHeight) / routeMapImage.pixelWidth + 16
+    : 230;
   let mapBottom = boxBottom - 16 - mapHeight;
   if (mapBottom < bottomMargin) {
     pdf.addPage();
@@ -1019,7 +1034,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
     size: useCompactLayout ? 9.5 : 11,
     color: '17 24 39',
   });
-  pdf.text(distanceBoxX + 12, distanceBoxY + distanceBoxHeight - 90, 'DISTANCES', {
+  pdf.text(distanceBoxX + 12, distanceBoxY + distanceBoxHeight - 90, 'DISTANCES  (MC = magnetic course)', {
     font: 'F2',
     size: useCompactLayout ? 9 : 10,
     color: '30 64 175',
@@ -1029,7 +1044,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
       pdf,
       distanceLine.from,
       distanceLine.to,
-      `${distanceLine.distance.toFixed(1)} NM`,
+      `${distanceLine.distance.toFixed(1)} NM${distanceLine.mc ? `  MC ${distanceLine.mc}\u00B0` : ''}`,
       distanceBoxX + 12,
       distanceBoxY + distanceBoxHeight - 112 - (index * (useCompactLayout ? 13 : 16)),
       { size: useCompactLayout ? 8.5 : 10 }
@@ -1112,11 +1127,16 @@ function SummaryDraftPreview({
       <div className="summary-route-row">
         <section className="summary-airport summary-distances-card">
           <div className="summary-distances">
-            <strong>Distances</strong>
+            <strong>Distances</strong> <span className="summary-mc-note">(MC = magnetic course)</span>
             {report.distanceLines.map((distanceLine) => (
               <div key={distanceLine}>{distanceLine}</div>
             ))}
             <div className="summary-total">Total: {report.total.toFixed(1)} NM</div>
+            {report.oneWay && (
+              <div>
+                Direct {report.routeCodes[0]} → {report.routeCodes[report.routeCodes.length - 1]}: {report.direct.toFixed(1)} NM
+              </div>
+            )}
           </div>
           <p className="summary-advisory">
             Always review NOTAMs, weather, and current airport conditions before departure.
@@ -1429,7 +1449,7 @@ export default function SummaryModal({
         second ? { label: 'Second Destination', code: secondLegCode, airport: second } : null,
       ].filter(Boolean);
 
-  const distanceSegments = oneWay
+  const distanceSegments = (oneWay
     ? oneWayCodes.slice(1).map((code, index) => {
         const from = airportData[oneWayCodes[index]];
         const to = airportData[code];
@@ -1443,12 +1463,20 @@ export default function SummaryModal({
         tripType === 'two' && secondLegCode
           ? { from: secondLegCode, to: homeCode, distance: leg3 }
           : null,
-      ].filter(Boolean);
+      ].filter(Boolean)
+  ).map((segment) => {
+    const a = airportData[segment.from];
+    const b = airportData[segment.to];
+    return { ...segment, mc: formatCourse(legCourse(a.lat, a.lon, b.lat, b.lon).magnetic) };
+  });
   const total = oneWay
     ? distanceSegments.reduce((sum, segment) => sum + segment.distance, 0)
     : (second ? leg1 + leg2 + leg3 : leg1 * 2);
+  const oneWayDirect = oneWay
+    ? haversine(home.lat, home.lon, airportData[oneWayCodes[oneWayCodes.length - 1]].lat, airportData[oneWayCodes[oneWayCodes.length - 1]].lon)
+    : null;
   const distanceLines = distanceSegments.map(
-    (segment) => `${segment.from} -> ${segment.to}: ${segment.distance.toFixed(1)} NM`
+    (segment) => `${segment.from} -> ${segment.to}: ${segment.distance.toFixed(1)} NM${segment.mc ? `  MC ${segment.mc}°` : ''}`
   );
 
   const routeCodes = oneWay ? [...oneWayCodes] : [...airportSections.map(({ code }) => code), homeCode];
@@ -1462,8 +1490,9 @@ export default function SummaryModal({
     '',
     `Course: ${routeDisplay}`,
     `Total: ${total.toFixed(1)} NM`,
+    ...(oneWay ? [`Direct ${oneWayCodes[0]} -> ${oneWayCodes[oneWayCodes.length - 1]}: ${oneWayDirect.toFixed(1)} NM`] : []),
     '',
-    'Leg Distances:',
+    'Leg Distances (MC = magnetic course):',
     ...distanceLines,
     '',
     'Always review NOTAMs, weather, and current airport conditions before departure.',
@@ -1483,6 +1512,7 @@ export default function SummaryModal({
     distanceSegments,
     routeName,
     total,
+    direct: oneWayDirect,
     oneWay,
   };
   const approachOptions = airportSections.flatMap((section) => {

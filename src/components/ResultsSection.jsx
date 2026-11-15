@@ -200,11 +200,15 @@ export default function ResultsSection({
             <div className="results-stack">
               {route.segments.map((segment) => (
                 <div key={`${segment.from}-${segment.to}`} className={`oneway-leg-result ${segment.ok ? 'ok' : 'bad'}`}>
-                  {segment.from} → {segment.to}: {segment.distance.toFixed(1)} NM
+                  {segment.from} → {segment.to}: {segment.distance.toFixed(1)} NM{segment.mc ? ` · MC ${segment.mc}°` : ''}
                   {segment.ok ? ' ✓' : ` (limit ${segment.min}–${segment.max} NM)`}
                 </div>
               ))}
-              {route.complete && <div className="oneway-total">Total {route.total.toFixed(1)} NM</div>}
+              {route.complete && (
+                <div className="oneway-total">
+                  Route {route.total.toFixed(1)} NM · Direct {route.direct.toFixed(1)} NM
+                </div>
+              )}
             </div>
             <p className="oneway-hint">
               {route.allOk

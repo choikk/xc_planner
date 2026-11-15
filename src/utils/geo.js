@@ -1,3 +1,5 @@
+import { magvar } from 'magvar';
+
 export function haversine(lat1, lon1, lat2, lon2) {
   const R = 3440.065;
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -121,4 +123,44 @@ export function computeEllipsePoints(focusA, focusB, semiMajorNm, numPoints = 18
   }
 
   return points;
+}
+
+// Course of a leg: the true course is taken at the middle of the great-circle path (like measuring it at the middle of the
+// leg on a chart), and the magnetic course applies the World Magnetic Model variation at that point (east variation is
+// positive, and MC = TC - variation).
+export function legCourse(lat1, lon1, lat2, lon2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const toDeg = (rad) => (rad * 180) / Math.PI;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const dLon = toRad(lon2 - lon1);
+  const bx = Math.cos(phi2) * Math.cos(dLon);
+  const by = Math.cos(phi2) * Math.sin(dLon);
+  const midLat = toDeg(Math.atan2(Math.sin(phi1) + Math.sin(phi2), Math.sqrt((Math.cos(phi1) + bx) ** 2 + by ** 2)));
+  const midLon = lon1 + toDeg(Math.atan2(by, Math.cos(phi1) + bx));
+
+  // Initial bearing from the midpoint toward the destination = the course flown at the middle of the leg
+  // (computeBearing above uses its own angle convention for the ellipse drawing, so it is not used here).
+  const midPhi = toRad(midLat);
+  const dLonMid = toRad(lon2 - midLon);
+  const east = Math.sin(dLonMid) * Math.cos(phi2);
+  const north = Math.cos(midPhi) * Math.sin(phi2) - Math.sin(midPhi) * Math.cos(phi2) * Math.cos(dLonMid);
+  const trueCourse = (toDeg(Math.atan2(east, north)) + 360) % 360;
+  let variation = null;
+  try {
+    const value = magvar(midLat, midLon);
+    if (Number.isFinite(value)) variation = value;
+  } catch {
+    variation = null;
+  }
+  const magnetic = variation === null ? null : (((trueCourse - variation) % 360) + 360) % 360;
+  return { trueCourse, magnetic, variation };
+}
+
+// 3-digit whole-degree course, "360" instead of "000".
+export function formatCourse(degrees) {
+  if (!Number.isFinite(degrees)) return '';
+  let rounded = Math.round(degrees) % 360;
+  if (rounded <= 0) rounded += 360;
+  return String(rounded).padStart(3, '0');
 }

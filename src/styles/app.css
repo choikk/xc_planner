@@ -1443,3 +1443,22 @@ details { margin-bottom: .65rem; }
   color: #15803d;
   font-size: .82rem;
 }
+
+.danger-btn {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 600;
+}
+
+.danger-btn:disabled {
+  background: #fff;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.summary-mc-note {
+  color: #64748b;
+  font-size: .8rem;
+  font-weight: 400;
+}

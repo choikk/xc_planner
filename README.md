@@ -23,6 +23,7 @@ Under Plan > Your Trip, the **A → B** mode plans a one-way route from the home
 3. **Repeat for each leg.** Every leg has its own range (a new leg starts with the previous leg's limits), and you can add as many stops as you need.
 4. **Finish adding stops** once B falls inside the current leg's range (button in the Plan tab, Results, or B's map popup); the last leg then goes straight to B.
 - Changing a leg range, the filters, the home base, or the destination drops any stop that no longer fits. **Clear** removes a stop and everything after it.
+- Each leg shows its **MC** (magnetic course) next to its distance, in the Plan/Results lists and in the Summary Report (preview, text, and PDF; also for round and triangle trips). The true course is taken at the middle of the leg and the variation comes from the World Magnetic Model (WMM2025, `magvar`) at that point.
 - When the route is finished and every leg is within its range, **Summary Report** produces the same PDF/text report for the whole route.
 
 ## Airport Diagrams

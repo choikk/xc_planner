@@ -1,4 +1,4 @@
-import { haversine } from './geo';
+import { formatCourse, haversine, legCourse } from './geo';
 
 export function buildLocationIndex(airportData) {
   const countries = new Set();
@@ -333,10 +333,13 @@ export function buildOneWaySegments(airportData, homeCode, destCode, legs, stops
     const distance = distanceBetween(airportData, from, to);
     const leg = legs[index];
     if (distance === null || !leg) return;
+    const a = airportData[from];
+    const b = airportData[to];
     segments.push({
       from,
       to,
       distance,
+      mc: formatCourse(legCourse(a.lat, a.lon, b.lat, b.lon).magnetic),
       min: leg.min,
       max: leg.max,
       ok: distance >= leg.min && distance <= leg.max,
@@ -346,6 +349,7 @@ export function buildOneWaySegments(airportData, homeCode, destCode, legs, stops
   return {
     segments,
     complete: Boolean(finished),
+    direct: distanceBetween(airportData, homeCode, destCode) ?? 0,   // straight A -> B distance
     total: segments.reduce((sum, segment) => sum + segment.distance, 0),
     allOk: Boolean(finished) && segments.every((segment) => segment.ok),
   };
