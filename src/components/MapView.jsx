@@ -554,11 +554,11 @@ export default function MapView({
               <>
                 <div className="airspace-legend-row">
                   <span className="airspace-legend-swatch mc-east-swatch" />
-                  <span>MC 000–179°: odd thousands + 500 ft</span>
+                  <span>MC 000–179°: odd thousands (+500ft for VFR)</span>
                 </div>
                 <div className="airspace-legend-row">
                   <span className="airspace-legend-swatch mc-west-swatch" />
-                  <span>MC 180–359°: even thousands + 500 ft</span>
+                  <span>MC 180–359°: even thousands (+500ft for VFR)</span>
                 </div>
                 <div className="airspace-legend-row muted">
                   <span className="airspace-legend-swatch" style={{ background: 'transparent', border: 'none' }} />

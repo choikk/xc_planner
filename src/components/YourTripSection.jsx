@@ -1,24 +1,73 @@
-function LegLimitInputs({ leg, index, onChange }) {
+import { useEffect, useState } from 'react';
+
+// A min/max distance pair that always keeps max >= min + RANGE_GAP (NM).
+// - Editing min pushes max up when needed.
+// - Editing max applies as soon as it is valid; while the typed value is still too small (for example "1" on the way to
+//   "150") it only stays in the box, and when the field is left it lowers min to max - RANGE_GAP instead.
+export const RANGE_GAP = 10;
+
+function RangeInputs({ range, onChange, label, step = 10, limit = 5000 }) {
+  const [minText, setMinText] = useState(String(range.min));
+  const [maxText, setMaxText] = useState(String(range.max));
+
+  useEffect(() => {
+    setMinText(String(range.min));
+    setMaxText(String(range.max));
+  }, [range.min, range.max]);
+
+  const changeMin = (event) => {
+    setMinText(event.target.value);
+    const value = Number(event.target.value);
+    if (event.target.value === '' || !Number.isFinite(value)) return;
+    const min = Math.max(0, value);
+    onChange({ min, max: Math.max(range.max, min + RANGE_GAP) });
+  };
+
+  const changeMax = (event) => {
+    setMaxText(event.target.value);
+    const value = Number(event.target.value);
+    if (event.target.value === '' || !Number.isFinite(value)) return;
+    if (value >= range.min + RANGE_GAP) onChange({ min: range.min, max: value });
+  };
+
+  const commitMax = () => {
+    const value = Number(maxText);
+    if (maxText === '' || !Number.isFinite(value)) {
+      setMaxText(String(range.max));
+      return;
+    }
+    const max = Math.max(value, RANGE_GAP);
+    onChange({ min: Math.max(0, Math.min(range.min, max - RANGE_GAP)), max });
+    setMaxText(String(max));
+  };
+
+  const commitMin = () => {
+    if (minText === '' || !Number.isFinite(Number(minText))) setMinText(String(range.min));
+  };
+
   return (
     <div className="dual-inputs">
       <input
         type="number"
-        aria-label={`Leg ${index + 1} minimum NM`}
-        value={leg.min}
+        aria-label={`${label} minimum NM`}
+        value={minText}
         min="0"
-        max="2000"
-        step="10"
-        onChange={(e) => onChange(index, 'min', Number(e.target.value))}
+        max={limit}
+        step={step}
+        onChange={changeMin}
+        onBlur={commitMin}
       />
       <span>-</span>
       <input
         type="number"
-        aria-label={`Leg ${index + 1} maximum NM`}
-        value={leg.max}
-        min="0"
-        max="2000"
-        step="10"
-        onChange={(e) => onChange(index, 'max', Number(e.target.value))}
+        aria-label={`${label} maximum NM`}
+        value={maxText}
+        min={range.min + RANGE_GAP}
+        max={limit}
+        step={step}
+        onChange={changeMax}
+        onBlur={commitMax}
+        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
       />
     </div>
   );
@@ -65,7 +114,7 @@ function OneWayPlanner({ oneWay }) {
           <strong>Leg {index + 1}</strong>
           <span className="oneway-leg-to">→ {toLabel}</span>
         </div>
-        <LegLimitInputs leg={legs[index]} index={index} onChange={onLegChange} />
+        <RangeInputs range={legs[index]} label={`Leg ${index + 1}`} limit={2000} onChange={(range) => onLegChange(index, range)} />
         {segment && (
           <div className={`oneway-leg-result ${segment.ok ? 'ok' : 'bad'}`}>
             {segment.from} → {segment.to}: {segment.distance.toFixed(1)} NM{segment.mc ? ` · MC ${segment.mc}°` : ''}
@@ -102,27 +151,7 @@ function OneWayPlanner({ oneWay }) {
         {!destAirport && (
           <>
             <div className="field-label">Distance from {homeCode || 'the origin'} (NM)</div>
-            <div className="dual-inputs">
-              <input
-                type="number"
-                aria-label="Destination minimum NM"
-                value={destRange.min}
-                min="0"
-                max="5000"
-                step="50"
-                onChange={(e) => onDestRangeChange('min', Number(e.target.value))}
-              />
-              <span>-</span>
-              <input
-                type="number"
-                aria-label="Destination maximum NM"
-                value={destRange.max}
-                min="0"
-                max="5000"
-                step="50"
-                onChange={(e) => onDestRangeChange('max', Number(e.target.value))}
-              />
-            </div>
+            <RangeInputs range={destRange} label="Destination" step={50} onChange={onDestRangeChange} />
             <p className="oneway-hint oneway-hint-tight">
               {destCandidateCount > 0
                 ? `${destCandidateCount} airport${destCandidateCount === 1 ? '' : 's'} match. Click one on the map (or in Results) and choose “Set as Destination”.`
@@ -226,7 +255,23 @@ function OneWayPlanner({ oneWay }) {
 }
 
 export default function YourTripSection({ filters, setFilters, onMapReset, hasMapSelection, oneWay }) {
-  const setField = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
+  // A triangle's total is at least twice its first leg, so airports beyond Total Trip max / 2 can never be chosen.
+  // Raising the first leg (or switching to a triangle) therefore lifts Total Trip max to 2 x First Leg max when needed.
+  const setField = (field, value) => setFilters((current) => {
+    const next = { ...current, [field]: value };
+    const touchesFirstLeg = field === 'firstLegMax' || (field === 'tripType' && value === 'two');
+    if (touchesFirstLeg && next.tripType === 'two' && next.totalLegMax < next.firstLegMax * 2) {
+      next.totalLegMax = next.firstLegMax * 2;
+    }
+    return next;
+  });
+  // A min/max pair is set together (RangeInputs already keeps max >= min + RANGE_GAP).
+  const setRange = (minField, maxField, range) => setFilters((current) => {
+    const next = { ...current, [minField]: range.min, [maxField]: range.max };
+    if (next.tripType === 'two' && next.totalLegMax < next.firstLegMax * 2) next.totalLegMax = next.firstLegMax * 2;
+    return next;
+  });
+  const totalTooSmall = filters.tripType === 'two' && filters.totalLegMax < filters.firstLegMax * 2;
   const isOneWay = filters.tripType === 'oneway';
 
   return (
@@ -263,49 +308,29 @@ export default function YourTripSection({ filters, setFilters, onMapReset, hasMa
         <div className="distance-grid">
           <div className="distance-card">
             <h3>First Leg (NM)</h3>
-            <div className="dual-inputs">
-              <input
-                type="number"
-                value={filters.firstLegMin}
-                min="10"
-                max="500"
-                step="10"
-                onChange={(e) => setField('firstLegMin', Number(e.target.value))}
-              />
-              <span>-</span>
-              <input
-                type="number"
-                value={filters.firstLegMax}
-                min="10"
-                max="500"
-                step="10"
-                onChange={(e) => setField('firstLegMax', Number(e.target.value))}
-              />
-            </div>
+            <RangeInputs
+              range={{ min: filters.firstLegMin, max: filters.firstLegMax }}
+              label="First leg"
+              limit={500}
+              onChange={(range) => setRange('firstLegMin', 'firstLegMax', range)}
+            />
           </div>
 
           {filters.tripType === 'two' && (
             <div className="distance-card">
               <h3>Total Trip (NM)</h3>
-              <div className="dual-inputs">
-                <input
-                  type="number"
-                  value={filters.totalLegMin}
-                  min="20"
-                  max="1500"
-                  step="10"
-                  onChange={(e) => setField('totalLegMin', Number(e.target.value))}
-                />
-                <span>-</span>
-                <input
-                  type="number"
-                  value={filters.totalLegMax}
-                  min="20"
-                  max="1500"
-                  step="10"
-                  onChange={(e) => setField('totalLegMax', Number(e.target.value))}
-                />
-              </div>
+              <RangeInputs
+                range={{ min: filters.totalLegMin, max: filters.totalLegMax }}
+                label="Total trip"
+                limit={1500}
+                onChange={(range) => setRange('totalLegMin', 'totalLegMax', range)}
+              />
+              {totalTooSmall && (
+                <div className="oneway-warn">
+                  Total Trip max is less than 2 × First Leg max, so airports farther than{' '}
+                  {Math.floor(filters.totalLegMax / 2)} NM are hidden. Raise Total Trip max to {filters.firstLegMax * 2} NM or more.
+                </div>
+              )}
             </div>
           )}
         </div>

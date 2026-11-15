@@ -944,7 +944,7 @@ function buildOneWayPdfBlob(report, routeMapImage) {
       pdf,
       segment.from,
       segment.to,
-      `${segment.distance.toFixed(1)} NM${segment.mc ? `  MC ${segment.mc}\u00B0` : ''}`,
+      `${segment.distance.toFixed(1)} NM${segment.mc ? `; MC ${segment.mc}\u00B0` : ''}`,
       left + 12 + (column * columnWidth),
       cursorY - (row * rowHeight),
       { size: 9.5 }
@@ -1044,7 +1044,7 @@ function buildGraphicalSummaryPdfBlob(report, routeMapImage) {
       pdf,
       distanceLine.from,
       distanceLine.to,
-      `${distanceLine.distance.toFixed(1)} NM${distanceLine.mc ? `  MC ${distanceLine.mc}\u00B0` : ''}`,
+      `${distanceLine.distance.toFixed(1)} NM${distanceLine.mc ? `; MC ${distanceLine.mc}\u00B0` : ''}`,
       distanceBoxX + 12,
       distanceBoxY + distanceBoxHeight - 112 - (index * (useCompactLayout ? 13 : 16)),
       { size: useCompactLayout ? 8.5 : 10 }
@@ -1476,7 +1476,7 @@ export default function SummaryModal({
     ? haversine(home.lat, home.lon, airportData[oneWayCodes[oneWayCodes.length - 1]].lat, airportData[oneWayCodes[oneWayCodes.length - 1]].lon)
     : null;
   const distanceLines = distanceSegments.map(
-    (segment) => `${segment.from} -> ${segment.to}: ${segment.distance.toFixed(1)} NM${segment.mc ? `  MC ${segment.mc}°` : ''}`
+    (segment) => `${segment.from} → ${segment.to}: ${segment.distance.toFixed(1)} NM${segment.mc ? `; MC ${segment.mc}°` : ''}`
   );
 
   const routeCodes = oneWay ? [...oneWayCodes] : [...airportSections.map(({ code }) => code), homeCode];
@@ -1490,7 +1490,7 @@ export default function SummaryModal({
     '',
     `Course: ${routeDisplay}`,
     `Total: ${total.toFixed(1)} NM`,
-    ...(oneWay ? [`Direct ${oneWayCodes[0]} -> ${oneWayCodes[oneWayCodes.length - 1]}: ${oneWayDirect.toFixed(1)} NM`] : []),
+    ...(oneWay ? [`Direct ${oneWayCodes[0]} → ${oneWayCodes[oneWayCodes.length - 1]}: ${oneWayDirect.toFixed(1)} NM`] : []),
     '',
     'Leg Distances (MC = magnetic course):',
     ...distanceLines,

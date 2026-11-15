@@ -267,14 +267,8 @@ export default function App() {
     loadAirportDetails(code);
   };
 
-  const handleDestRangeChange = (field, value) => {
-    const number = Number.isFinite(value) ? Math.max(0, value) : 0;
-    setDestRange((current) => {
-      const next = { ...current, [field]: number };
-      if (field === 'min' && next.max < next.min) next.max = next.min;
-      if (field === 'max' && next.min > next.max) next.min = next.max;
-      return next;
-    });
+  const handleDestRangeChange = (range) => {
+    setDestRange({ min: range.min, max: range.max });
   };
 
   const handleSelectOneWayStop = (code) => {
@@ -302,15 +296,8 @@ export default function App() {
     setOneWayFinished(false);
   };
 
-  const handleOneWayLegChange = (index, field, value) => {
-    const number = Number.isFinite(value) ? Math.max(0, value) : 0;
-    setOneWayLegs((current) => current.map((leg, i) => {
-      if (i !== index) return leg;
-      const next = { ...leg, [field]: number };
-      if (field === 'min' && next.max < next.min) next.max = next.min;
-      if (field === 'max' && next.min > next.max) next.min = next.max;
-      return next;
-    }));
+  const handleOneWayLegChange = (index, range) => {
+    setOneWayLegs((current) => current.map((leg, i) => (i === index ? { min: range.min, max: range.max } : leg)));
   };
 
   const handleMapReset = () => {
