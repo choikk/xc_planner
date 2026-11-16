@@ -29,8 +29,8 @@ Under Plan > Your Trip, the **A → B** mode plans a one-way route from the home
 4. **Finish adding stops** once B falls inside the current leg's range (button in the Plan tab, Results, or B's map popup); the last leg then goes straight to B.
 - Changing a leg range, the filters, the home base, or the destination drops any stop that no longer fits. **Clear** removes a stop and everything after it.
 - Each leg shows its **MC** (magnetic course) next to its distance, in the Plan/Results lists and in the Summary Report (preview, text, and PDF; also for round and triangle trips). The true course is taken at the middle of the leg and the variation comes from the World Magnetic Model (WMM2025, `magvar`) at that point.
-- **Flip origin and destination** (shown once a destination is chosen) swaps the two; the destination becomes the home base and the route restarts from it.
-- Changing the home base in the Home tab clears the destination (Flip is the exception).
+- **Flip origin and destination** (shown once a destination is chosen) swaps the two **for this trip only**: the destination becomes the A-to-B origin and the old origin the destination, the route restarts from the new origin, and the home base (Home tab and the saved default) stays as it is. When the origin is not the home base, the Origin card shows the home base and **Use home base as origin** returns to it.
+- Changing the home base in the Home tab clears the destination and the origin follows the new home base again.
 - The direct A-to-B distance is shown on the Destination card and next to the route total, e.g. `Route 328.3 NM · Direct 327.6 NM (+0.2%)`.
 - On the map each leg label shows the distance and the MC: green for 000-179 degrees, red for 180-359 degrees (odd or even thousands, +500 ft for VFR; IFR 14 CFR 91.179, VFR 14 CFR 91.159). The legend explains the colors.
 - When the route is finished and every leg is within its range, **Summary Report** produces the same PDF/text report for the whole route. **Finish adding stops** is also offered next to Summary Report (bottom of the sidebar on desktop; top and bottom of the panel on phones) as soon as the destination is reachable.
