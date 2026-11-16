@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import BottomSheet from './components/BottomSheet';
 import FiltersSection from './components/FiltersSection';
 import HomeBaseSection from './components/HomeBaseSection';
@@ -66,6 +66,8 @@ export default function App() {
   const [activePanelTab, setActivePanelTab] = useState('home');
   // One-way (A -> B) planning: destination, per-leg distance limits and the stops picked so far.
   const [destCode, setDestCode] = useState('');
+  // A -> B origin. Empty means "the home base"; Flip sets it so the swap affects this trip only and not the home base.
+  const [originOverride, setOriginOverride] = useState('');
   const [destRange, setDestRange] = useState({ min: 100, max: 500 });
   const [oneWayLegs, setOneWayLegs] = useState([DEFAULT_ONE_WAY_LEG]);
   const [oneWayStops, setOneWayStops] = useState([]);
@@ -91,6 +93,12 @@ export default function App() {
   const selectedAirportWithCode = selectedAirport
     ? { ...selectedAirport, airport_code: selectedAirport.airport_code || selectedAirportCode }
     : null;
+  const tripOriginCode = isOneWay && originOverride ? originOverride : selectedAirportCode;
+  const tripOriginAirport = airportData[tripOriginCode] || null;
+  const tripOriginWithCode = useMemo(
+    () => (tripOriginAirport ? { ...tripOriginAirport, airport_code: tripOriginAirport.airport_code || tripOriginCode } : null),
+    [tripOriginAirport, tripOriginCode]
+  );
   const firstLegResults = useMemo(
     () => (isOneWay ? [] : findFirstLegDestinations(airportData, selectedAirportCode, filters)),
     [airportData, selectedAirportCode, filters]
@@ -111,8 +119,8 @@ export default function App() {
   // The part of the chosen route that is still valid for the current leg limits, filters, home base and destination.
   const oneWayValid = useMemo(() => {
     if (!isOneWay || !destAirport) return { stops: [], finished: false };
-    return validateOneWayRoute(airportData, selectedAirportCode, destCode, oneWayLegs, oneWayStops, oneWayFinished, filters);
-  }, [isOneWay, airportData, selectedAirportCode, destCode, destAirport, oneWayLegs, oneWayStops, oneWayFinished, filters]);
+    return validateOneWayRoute(airportData, tripOriginCode, destCode, oneWayLegs, oneWayStops, oneWayFinished, filters);
+  }, [isOneWay, airportData, tripOriginCode, destCode, destAirport, oneWayLegs, oneWayStops, oneWayFinished, filters]);
   const effectiveStops = oneWayValid.stops;
   const oneWayDone = oneWayValid.finished;
 
@@ -124,18 +132,18 @@ export default function App() {
     if (oneWayFinished !== oneWayDone) setOneWayFinished(oneWayDone);
   }, [effectiveStops, oneWayStops, oneWayDone, oneWayFinished]);
 
-  const destPicking = Boolean(isOneWay && !destCode && selectedAirport);
+  const destPicking = Boolean(isOneWay && !destCode && tripOriginAirport);
   const destCandidates = useMemo(() => {
     if (!destPicking) return [];
-    return findDestinationCandidates(airportData, selectedAirportCode, destRange, filters);
-  }, [destPicking, airportData, selectedAirportCode, destRange, filters]);
+    return findDestinationCandidates(airportData, tripOriginCode, destRange, filters);
+  }, [destPicking, airportData, tripOriginCode, destRange, filters]);
 
   const oneWayActiveIndex = effectiveStops.length;
   const oneWayFaintRange = destPicking ? destRange : (oneWayLegs[oneWayActiveIndex] || DEFAULT_ONE_WAY_LEG);
   const oneWayLeg = oneWayLegs[oneWayActiveIndex] || DEFAULT_ONE_WAY_LEG;
   // A next step is open until the route has been finished at B.
-  const oneWaySlotOpen = Boolean(isOneWay && destAirport && selectedAirport && !oneWayDone);
-  const oneWayOriginCode = effectiveStops.length ? effectiveStops[effectiveStops.length - 1] : selectedAirportCode;
+  const oneWaySlotOpen = Boolean(isOneWay && destAirport && tripOriginAirport && !oneWayDone);
+  const oneWayOriginCode = effectiveStops.length ? effectiveStops[effectiveStops.length - 1] : tripOriginCode;
   const oneWayFinish = useMemo(() => {
     if (!oneWaySlotOpen) return { distance: 0, canFinish: false };
     return oneWayFinishInfo(airportData, oneWayOriginCode, destCode, oneWayLeg);
@@ -155,23 +163,23 @@ export default function App() {
     if (!((isOneWay && oneWaySlotOpen) || destPicking)) return { filtered: [], outer: [] };
     return findOneWayFaintAirports(
       airportData,
-      destPicking ? selectedAirportCode : oneWayOriginCode,
+      destPicking ? tripOriginCode : oneWayOriginCode,
       oneWayFaintRange,
       filters,
       [...effectiveStops, destCode]
     );
-  }, [isOneWay, oneWaySlotOpen, destPicking, airportData, selectedAirportCode, oneWayOriginCode, oneWayFaintRange, filters, effectiveStops, destCode]);
+  }, [isOneWay, oneWaySlotOpen, destPicking, airportData, tripOriginCode, oneWayOriginCode, oneWayFaintRange, filters, effectiveStops, destCode]);
   const oneWayProblem = useMemo(() => {
     if (!oneWaySlotOpen || oneWayFinish.canFinish || oneWayCandidates.length > 0) return '';
     return describeOneWayStuck(airportData, oneWayOriginCode, destCode, oneWayLeg);
   }, [oneWaySlotOpen, oneWayFinish, oneWayCandidates, airportData, oneWayOriginCode, destCode, oneWayLeg]);
   const oneWayRoute = useMemo(() => {
-    if (!isOneWay || !destAirport || !selectedAirport) {
+    if (!isOneWay || !destAirport || !tripOriginAirport) {
       return { segments: [], complete: false, direct: 0, total: 0, allOk: false };
     }
-    return buildOneWaySegments(airportData, selectedAirportCode, destCode, oneWayLegs, effectiveStops, oneWayDone);
-  }, [isOneWay, airportData, selectedAirportCode, selectedAirport, destCode, destAirport, oneWayLegs, effectiveStops, oneWayDone]);
-  const oneWayCodes = oneWayRoute.complete ? [selectedAirportCode, ...effectiveStops, destCode] : [];
+    return buildOneWaySegments(airportData, tripOriginCode, destCode, oneWayLegs, effectiveStops, oneWayDone);
+  }, [isOneWay, airportData, tripOriginCode, tripOriginAirport, destCode, destAirport, oneWayLegs, effectiveStops, oneWayDone]);
+  const oneWayCodes = oneWayRoute.complete ? [tripOriginCode, ...effectiveStops, destCode] : [];
   const summaryReady = isOneWay ? oneWayRoute.allOk : Boolean(selectedFirstLegCode);
 
   useEffect(() => {
@@ -227,22 +235,19 @@ export default function App() {
     setOneWayStops([]);
     setOneWayLegs((current) => current.slice(0, 1));
     setOneWayFinished(false);
-  }, [selectedAirportCode, destCode]);
+  }, [tripOriginCode, destCode]);
 
-  // Changing the home airport (Home tab, or its automatic re-selection) starts a new trip: the destination is cleared.
-  // Flip origin/destination changes both on purpose, so it marks its own change and keeps the destination.
-  const flippingRef = useRef(false);
+  // Changing the home airport (Home tab, or its automatic re-selection) starts a new trip: the destination is cleared and
+  // the A -> B origin follows the home base again. Flip does not touch the home airport, so it never triggers this.
   useEffect(() => {
-    if (flippingRef.current) {
-      flippingRef.current = false;
-      return;
-    }
     setDestCode('');
+    setOriginOverride('');
   }, [selectedAirportCode]);
 
+  // The flipped origin needs its airport details (runways, ...) like any other chosen airport.
   useEffect(() => {
-    if (destCode) loadAirportDetails(destCode);
-  }, [destCode, loadAirportDetails]);
+    if (originOverride) loadAirportDetails(originOverride);
+  }, [originOverride, loadAirportDetails]);
 
   // A saved home airport is selected on the first render, before the airport list has loaded.
   // Re-run once the list contains it, otherwise its runways would stay on "Loading airport details...".
@@ -284,17 +289,19 @@ export default function App() {
     setActivePanelTab('results');
   };
 
-  // Swap origin and destination: the destination becomes the home base (origin) and the old origin the destination.
-  // The route restarts from the new origin (stops are cleared by the effect on home/destination changes).
+  // Swap origin and destination for this trip only: the destination becomes the A -> B origin and the old origin the
+  // destination. The home base (Home tab and the saved default) is not changed. The route restarts from the new origin.
   const handleFlipOneWay = () => {
-    const newHome = airportData[destCode];
-    if (!newHome || !selectedAirportCode) return;
-    const oldHomeCode = selectedAirportCode;
-    flippingRef.current = true;
-    setSelectedCountry(String(newHome.country || 'US').trim());
-    setSelectedState(String(newHome.state || 'unknown').trim());
-    setSelectedAirportCode(destCode);
-    setDestCode(oldHomeCode);
+    if (!destAirport || !tripOriginCode) return;
+    const oldOrigin = tripOriginCode;
+    setOriginOverride(destCode === selectedAirportCode ? '' : destCode);
+    setDestCode(oldOrigin);
+  };
+
+  // Back to the home base as the origin (the destination is cleared when it is the home base itself).
+  const handleResetOrigin = () => {
+    setOriginOverride('');
+    if (destCode === selectedAirportCode) setDestCode('');
   };
 
   const handleSelectDestination = (code) => {
@@ -351,11 +358,14 @@ export default function App() {
     legs: oneWayLegs,
     stops: effectiveStops,
     route: oneWayRoute,
-    homeCode: selectedAirportCode,
+    homeCode: tripOriginCode,
+    homeBaseCode: selectedAirportCode,
+    originIsHome: tripOriginCode === selectedAirportCode,
+    onResetOrigin: handleResetOrigin,
     destCode,
     destAirport,
     countries,
-    homeAirport: selectedAirportWithCode,
+    homeAirport: tripOriginWithCode,
     slotOpen: oneWaySlotOpen,
     activeIndex: oneWayActiveIndex,
     destRange,
@@ -593,7 +603,7 @@ export default function App() {
           {mobileTitleBlock}
         </div>
         <MapView
-          homeAirport={selectedAirportWithCode}
+          homeAirport={isOneWay ? tripOriginWithCode : selectedAirportWithCode}
           filters={filters}
           firstLegResults={firstLegResults}
           filteredInRangeResults={filteredInRangeResults}
@@ -647,7 +657,7 @@ export default function App() {
         onClose={() => setSummaryOpen(false)}
         airportData={airportData}
         loadAirportDetails={loadAirportDetails}
-        homeCode={selectedAirportCode}
+        homeCode={isOneWay ? tripOriginCode : selectedAirportCode}
         firstLegCode={selectedFirstLegCode}
         secondLegCode={selectedSecondLegCode}
         tripType={filters.tripType}

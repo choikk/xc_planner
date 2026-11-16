@@ -88,6 +88,9 @@ function OneWayPlanner({ oneWay }) {
     route,
     homeCode,
     homeAirport,
+    homeBaseCode,
+    originIsHome,
+    onResetOrigin,
     destCode,
     destAirport,
     slotOpen,
@@ -140,7 +143,18 @@ function OneWayPlanner({ oneWay }) {
             <div>
               Elevation {homeAirport.elevation} ft · Class {homeAirport.airspace} · Fuel {homeAirport.fuel}
             </div>
-            <div className="oneway-hint oneway-hint-tight">Change the origin in the Home tab.</div>
+            {originIsHome ? (
+              <div className="oneway-hint oneway-hint-tight">
+                This is your home base (change it in the Home tab). Flip swaps origin and destination for this trip only.
+              </div>
+            ) : (
+              <div className="oneway-hint oneway-hint-tight">
+                Home base: {homeBaseCode}. Flip changed the origin for this trip only.{' '}
+                <button type="button" className="oneway-link" onClick={onResetOrigin}>
+                  Use home base as origin
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <p className="empty-text">Select a home base in the Home tab.</p>
