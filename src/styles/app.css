@@ -1639,3 +1639,36 @@ details { margin-bottom: .5rem; }
     bottom: auto;
   }
 }
+
+.oneway-code-row {
+  display: flex;
+  gap: .4rem;
+  margin-top: .25rem;
+}
+
+.oneway-code-row input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+}
+
+.oneway-code-set {
+  height: 34px;
+  padding: 0 .9rem;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.oneway-code-set:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.oneway-code-error {
+  color: #b91c1c;
+}

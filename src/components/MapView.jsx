@@ -144,6 +144,13 @@ function stopLeafletEvent(event) {
   }
 }
 
+// Height of the mobile bottom sheet that covers the lower part of the map (0 on the desktop layout).
+function bottomSheetInset() {
+  const sheet = document.querySelector('.bottom-sheet');
+  if (!sheet || getComputedStyle(sheet).display === 'none') return 0;
+  return Math.round(sheet.getBoundingClientRect().height);
+}
+
 function MapAutoView({ homeAirport }) {
   const map = useMap();
   const homeCode = homeAirport?.airport_code || '';
@@ -170,7 +177,7 @@ function MapFitRoute({ homeAirport, destAirport }) {
         [homeAirport.lat, homeAirport.lon],
         [destAirport.lat, destAirport.lon],
       ],
-      { padding: [60, 60], maxZoom: 9 }
+      { paddingTopLeft: [60, 60], paddingBottomRight: [60, 60 + bottomSheetInset()], maxZoom: 9 }
     );
   }, [map, homeCode, destCode]);
 
@@ -183,7 +190,10 @@ function MapFitRange({ homeAirport, maxNm }) {
 
   useEffect(() => {
     if (!homeAirport || !isFiniteCoord(homeAirport.lat, homeAirport.lon) || !(maxNm > 0)) return;
-    map.fitBounds(L.latLng(homeAirport.lat, homeAirport.lon).toBounds(maxNm * 1852 * 2), { padding: [20, 20] });
+    map.fitBounds(L.latLng(homeAirport.lat, homeAirport.lon).toBounds(maxNm * 1852 * 2), {
+      paddingTopLeft: [20, 20],
+      paddingBottomRight: [20, 20 + bottomSheetInset()],
+    });
   }, [map, homeCode, maxNm]);
 
   return null;

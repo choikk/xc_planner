@@ -9,6 +9,7 @@ import YourTripSection from './components/YourTripSection';
 import { useAirportData } from './hooks/useAirportData';
 import { useVisitors } from './hooks/useVisitors';
 import { formatNasrEffective } from './utils/nasr';
+import { haversine } from './utils/geo';
 import {
   findFirstLegDestinations,
   findFilteredInRangeFirstLegDestinations,
@@ -43,8 +44,8 @@ const DEFAULT_ONE_WAY_LEG = { min: 50, max: 150 };
 
 const panelTabs = [
   { id: 'home', label: 'Home' },
-  { id: 'plan', label: 'Plan' },
   { id: 'filters', label: 'Filters' },
+  { id: 'plan', label: 'Plan' },
   { id: 'results', label: 'Results' },
 ];
 const APP_VERSION = 'v2611.18';
@@ -68,7 +69,7 @@ export default function App() {
   const [destCode, setDestCode] = useState('');
   // A -> B origin. Empty means "the home base"; Flip sets it so the swap affects this trip only and not the home base.
   const [originOverride, setOriginOverride] = useState('');
-  const [destRange, setDestRange] = useState({ min: 100, max: 500 });
+  const [destRange, setDestRange] = useState({ min: 50, max: 250 });
   const [oneWayLegs, setOneWayLegs] = useState([DEFAULT_ONE_WAY_LEG]);
   const [oneWayStops, setOneWayStops] = useState([]);
   const [oneWayFinished, setOneWayFinished] = useState(false);
@@ -311,6 +312,25 @@ export default function App() {
     loadAirportDetails(code);
   };
 
+  // Destination typed as an airport code (ICAO such as KGAI, or the 3-letter form GAI). Returns an error message, or '' on success.
+  const handleSetDestinationByCode = (raw) => {
+    const typed = String(raw || '').trim().toUpperCase();
+    if (!typed) return 'Enter an airport code.';
+    const code = [typed, `K${typed}`].find((candidate) => airportData[candidate]);
+    if (!code) return `Airport ${typed} was not found.`;
+    if (code === tripOriginCode) return 'That is the origin airport.';
+    // Max range follows the typed airport: its distance rounded to the nearest 10 NM (min is lowered if needed to keep the gap).
+    const origin = airportData[tripOriginCode];
+    const target = airportData[code];
+    if (origin && target) {
+      const distance = haversine(origin.lat, origin.lon, target.lat, target.lon);
+      const max = Math.max(20, Math.round(distance / 10) * 10);
+      setDestRange((current) => ({ min: Math.min(current.min, max - 10), max }));
+    }
+    handleSelectDestination(code);
+    return '';
+  };
+
   const handleDestRangeChange = (range) => {
     setDestRange({ min: range.min, max: range.max });
   };
@@ -371,6 +391,7 @@ export default function App() {
     destRange,
     destCandidateCount: destCandidates.length,
     onDestRangeChange: handleDestRangeChange,
+    onSetDestByCode: handleSetDestinationByCode,
     onClearDest: () => setDestCode(''),
     onFlip: handleFlipOneWay,
     onLegChange: handleOneWayLegChange,

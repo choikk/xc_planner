@@ -97,6 +97,7 @@ function OneWayPlanner({ oneWay }) {
     destRange,
     destCandidateCount,
     onDestRangeChange,
+    onSetDestByCode,
     onClearDest,
     onFlip,
     problem,
@@ -128,6 +129,14 @@ function OneWayPlanner({ oneWay }) {
         )}
       </div>
     );
+  };
+
+  const [codeText, setCodeText] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const submitDestCode = () => {
+    const error = onSetDestByCode(codeText);
+    setCodeError(error);
+    if (!error) setCodeText('');
   };
 
   return (
@@ -179,6 +188,30 @@ function OneWayPlanner({ oneWay }) {
                 ? `${destCandidateCount} airport${destCandidateCount === 1 ? '' : 's'} match. Click one on the map (or in Results) and choose “Set as Destination”.`
                 : 'No airports match this range and the current filters. Widen the range or relax the filters.'}
             </p>
+            <div className="field-label">Or enter an airport code</div>
+            <div className="oneway-code-row">
+              <input
+                type="text"
+                value={codeText}
+                placeholder="e.g. KOWD"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={8}
+                aria-label="Destination airport code"
+                onChange={(event) => {
+                  setCodeText(event.target.value.toUpperCase());
+                  setCodeError('');
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') submitDestCode();
+                }}
+              />
+              <button type="button" className="oneway-code-set" onClick={submitDestCode} disabled={!codeText.trim()}>
+                Set
+              </button>
+            </div>
+            {codeError && <p className="oneway-hint oneway-hint-tight oneway-code-error">{codeError}</p>}
           </>
         )}
 
