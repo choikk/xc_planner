@@ -1631,3 +1631,11 @@ details { margin-bottom: .5rem; }
 .mobile-map-title .nasr-dates {
   font-size: .62rem;
 }
+
+/* Narrow layout: the VFR chart control sits at the top right, so the legend moves just below it. */
+@media (max-width: 1100px) {
+  .airspace-legend {
+    top: 72px;
+    bottom: auto;
+  }
+}

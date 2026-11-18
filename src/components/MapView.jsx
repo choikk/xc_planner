@@ -17,6 +17,7 @@ import L from 'leaflet';
 import { computeEllipsePoints, formatCourse, formatSurface, getAirspaceColor, haversine, legCourse } from '../utils/geo';
 import { formatDecommissionedNote } from '../utils/decommissioned';
 import { useAopaDiagramUrl } from '../utils/aopa';
+import VfrChartsControl from './VfrChartsControl';
 
 const homeIcon = new L.Icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -580,6 +581,7 @@ export default function MapView({
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+      <VfrChartsControl position="topright" />
 
       {oneWayActive && oneWayDest ? (
         <MapFitRoute homeAirport={homeAirport} destAirport={oneWayDest} />
