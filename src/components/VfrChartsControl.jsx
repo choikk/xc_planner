@@ -68,7 +68,7 @@ export default function VfrChartsControl({ position = 'topright', belowHeaderOnM
     let vfr = null;
     let disposed = false;
     let on = readStored(STORAGE_KEY, '1') === '1';
-    let tac = readStored(`${STORAGE_KEY}_tac`, '1') === '1';
+    let tac = readStored(`${STORAGE_KEY}_tac`, '0') === '1';
     let opacity = Number(readStored(`${STORAGE_KEY}_opacity`, '0.9'));
     if (!(opacity >= 0 && opacity <= 1)) opacity = 0.9;
 
