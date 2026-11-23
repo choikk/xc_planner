@@ -608,7 +608,8 @@ export default function MapView({
         suppressResetRef={suppressBackgroundResetRef}
       />
 
-      <Pane name="ellipsePane" style={{ zIndex: 250 }} />
+      {/* Above the VFR chart panes (250/260) so the triangle boundaries stay visible over the charts. */}
+      <Pane name="ellipsePane" style={{ zIndex: 270 }} />
 
       {homeAirport && isFiniteCoord(homeAirport.lat, homeAirport.lon) && (
         <>

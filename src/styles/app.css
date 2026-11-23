@@ -1672,3 +1672,21 @@ details { margin-bottom: .5rem; }
 .oneway-code-error {
   color: #b91c1c;
 }
+
+/* Summary report modal: the close button keeps its round shape (it used to be squeezed by the title text) and the Send to / Download button is lower. */
+.modal-header > .icon-btn {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  align-self: flex-start;
+}
+
+.summary-actions .summary-share-btn {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
