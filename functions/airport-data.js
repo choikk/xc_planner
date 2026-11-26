@@ -79,12 +79,13 @@ function normalizeDetailedAirport(row) {
   };
 }
 
-// pub = open to the public (FAA FACILITY_USE_CODE PU), mil = military-owned private use, pvt = other private use.
+// pub = open to the public (FAA FACILITY_USE_CODE PU), mil = military-owned (even when the FAA lists it as public use,
+// such as Dover AFB, where civil aircraft still need prior permission), pvt = other private use.
 // Unknown values count as public so nothing disappears before the data is loaded.
 function accessCode(row) {
+  if (['MA', 'MN', 'MR', 'CG'].includes(String(row.ownership || '').toUpperCase())) return 'mil';
   const use = String(row.facility_use || '').toUpperCase();
-  if (!use || use === 'PU') return 'pub';
-  return ['MA', 'MN', 'MR', 'CG'].includes(String(row.ownership || '').toUpperCase()) ? 'mil' : 'pvt';
+  return !use || use === 'PU' ? 'pub' : 'pvt';
 }
 
 function compactBaseAirport(row) {
